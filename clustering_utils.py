@@ -58,28 +58,29 @@ class HierarchClusteringAnalysisTool:
         # Instantiate model
         hrcal_model = AgglomerativeClustering()
 
+        # Choose number of clusters GUI
+        # Display colours and let user choose the ralabelling
+        # Create GUI
+        master = tk.Tk()
+
+        # Get the screen width and height
+        screen_width = master.winfo_screenwidth()
+        screen_height = master.winfo_screenheight()
+
+        # Set the window dimensions to cover the full screen
+        master.geometry(f"{int(screen_width)}x{int(screen_height)}")
+        master.configure(bg='white')
+        master.title('Choose number of clusters')
+        master.attributes("-topmost", True)
+        master.focus_force()
+
         # Figure with scores to decide n of clusters
-        self.scorefig = plt.figure(figsize=(5, 5))
-
-        # Gap statistic
-        _, _, gapstats = gapstat(data, hrcal_model, max_k=10, calcStats=True)
-        scores = gapstats['data'][:, list(gapstats['columns']).index('Gap')]
-        ax = plt.subplot(4, 2, 1)
-        plt.plot(gapstats['index'][1:-1], scores[1:-1], linestyle='-', marker='D', color='b')
-        plt.ylabel('Gap')
-        ylimits = plt.ylim()
-        plt.ylim([0.9 * ylimits[0], 1.1 * ylimits[1]])
-        plt.grid()
-        plt.text(0.98, 0.98, 'optimum: largest', ha='right', va='top', transform=ax.transAxes)
-        plt.title('Internal validity scores')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-
-        # Store scores
-        self.scores = pd.DataFrame(scores[1:-1], index=gapstats['index'][1:-1], columns=['Gap'])
+        fig_width = min(screen_width/100*0.5, 5)  # Cap the width at 10 inches
+        fig_height = min(screen_height/100*0.9, 6)  # Cap the height at 6 inches
+        self.scorefig = plt.figure(figsize=(fig_width, fig_height))
 
         # Silhouette scores
-        ax = plt.subplot(4, 2, 3)
+        ax = plt.subplot(4, 2, 1)
         visualiser = KElbowVisualizer(hrcal_model, k=(2, 11), metric='silhouette', timings=False, locate_elbow=False)
         visualiser.fit(data)
         visualiser.show()
@@ -93,10 +94,10 @@ class HierarchClusteringAnalysisTool:
         ax.spines[['top', 'right']].set_visible(False)
 
         # Store scores
-        self.scores['Silhouette'] = visualiser.k_scores_
+        self.scores = pd.DataFrame(visualiser.k_scores_, index=visualiser.k_values_, columns=['Silhouette'])
 
         # Calinski_harabasz
-        ax = plt.subplot(4, 2, 5)
+        ax = plt.subplot(4, 2, 3)
         visualiser = KElbowVisualizer(hrcal_model, k=(2, 11), metric='calinski_harabasz', timings=False, locate_elbow=False)
         visualiser.fit(data)
         visualiser.show()
@@ -113,7 +114,7 @@ class HierarchClusteringAnalysisTool:
         self.scores['Calinski-Harabasz'] = visualiser.k_scores_
 
         # Davies_Bouldin
-        ax = plt.subplot(4, 2, 7)
+        ax = plt.subplot(4, 2, 5)
         scores = [metrics.davies_bouldin_score(data, AgglomerativeClustering(n_clusters=k).fit_predict(data)) for k
                   in range(2, 11)]
         plt.plot(range(2, 11), scores, linestyle='-', marker='D', color='b')
@@ -128,6 +129,23 @@ class HierarchClusteringAnalysisTool:
 
         # Store scores
         self.scores['Davies-Bouldin'] = scores
+
+        # Gap statistic
+        _, _, gapstats = gapstat(data, hrcal_model, max_k=10, calcStats=True)
+        scores = gapstats['data'][:, list(gapstats['columns']).index('Gap')]
+        ax = plt.subplot(4, 2, 7)
+        plt.plot(gapstats['index'][1:-1], scores[1:-1], linestyle='-', marker='D', color='b')
+        plt.ylabel('Gap')
+        ylimits = plt.ylim()
+        plt.ylim([0.9 * ylimits[0], 1.1 * ylimits[1]])
+        plt.grid()
+        plt.text(0.98, 0.98, 'optimum: largest', ha='right', va='top', transform=ax.transAxes)
+        plt.title('Internal validity scores')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+        # Store scores
+        self.scores['Gap'] = scores[1:-1]
 
         # Silhouette plots
         plotis = [2, 4, 6, 8]
@@ -193,35 +211,29 @@ class HierarchClusteringAnalysisTool:
         self.scorefig.suptitle(figtitle)
         plt.tight_layout()
 
-        # Choose number of clusters GUI
-        # Display colours and let user choose the ralabelling
-        # Create GUI
-        master = tk.Tk()
-
-        # Get the screen width and height
-        screen_width = master.winfo_screenwidth()
-        screen_height = master.winfo_screenheight()
-
-        # Set the window dimensions to cover the full screen
-        master.geometry(f"{screen_width}x{screen_height}")
-        master.configure(bg='white')
-        master.title('Choose number of clusters. Silhouette, Calinski-Harabasz, Davies-Bouldin were considered in the'
-                     ' paper. Priority given to Silhouette. See paper for details.')
-        master.attributes("-topmost", True)
-        master.focus_force()
-
         # Embed figures in tkinter
         # Internal validity scores and Silhouette analysis
-        leftframe = tk.Frame(master)
-        leftframe.grid(row=0, column=0)
-        canvas = FigureCanvasTkAgg(self.scorefig, master=leftframe)
+        lefttopframe = tk.Frame(master)
+        lefttopframe.grid(row=0, column=0)
+        canvas = FigureCanvasTkAgg(self.scorefig, master=lefttopframe)
         canvas.draw()
         canvas.get_tk_widget().pack()
+
+        # String with instructions
+        # number of cluster choice
+        leftbottomframe = tk.Frame(master)
+        leftbottomframe.grid(row=1, column=0)
+        instructs = ('Set number of clusters in the drop menu on the right. '
+                     'Silhouette, Calinski-Harabasz, Davies-Bouldin considered in the paper. '
+                     'Priority given to Silhouette. '
+                     'See paper for more details.')
+        string = tk.Label(leftbottomframe, textvariable=tk.StringVar(leftbottomframe, instructs))
+        string.grid(row=0, column=0)
 
         # Blank dendrogram
         righttopframe = tk.Frame()
         righttopframe.grid(row=0, column=1)
-        self.dendrofig = plt.figure(figsize=(5, 5))
+        self.dendrofig = plt.figure(figsize=(fig_width, fig_height))
         clustdataholder = AgglomerativeClustering(distance_threshold=0, n_clusters=None).fit(data)
         _, linkage = plot_dendrogram(clustdataholder,
                                      datalabels,
