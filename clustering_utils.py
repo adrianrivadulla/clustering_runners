@@ -88,7 +88,7 @@ class HierarchClusteringAnalysisTool:
         ax = plt.subplot(4, 2, 1)
         visualiser = KElbowVisualizer(hrcal_model, k=(2, 11), metric='silhouette', timings=False, locate_elbow=False)
         visualiser.fit(data)
-        visualiser.show()
+        # visualiser.show()
         plt.title('')
         plt.ylabel('Silhouette')
         plt.xlabel('')
@@ -105,7 +105,7 @@ class HierarchClusteringAnalysisTool:
         ax = plt.subplot(4, 2, 3)
         visualiser = KElbowVisualizer(hrcal_model, k=(2, 11), metric='calinski_harabasz', timings=False, locate_elbow=False)
         visualiser.fit(data)
-        visualiser.show()
+        # visualiser.show()
         plt.title('')
         plt.ylabel('Calinski-Harabasz \nIndex')
         ylimits = plt.ylim()
@@ -561,6 +561,8 @@ def corrmat_plot(array, figsize=(5, 5)):
 
 
 class TransitionAnalysis:
+
+    # TODO. Embed dendroax in GUI so it gets shown at the same time and it's tidier
 
     """
     A class to analyse transitions between two clustering partitions. It allows to recolour the dendrogram based on the
