@@ -21,7 +21,8 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn import metrics
 from scipy.cluster.hierarchy import dendrogram
 import sys
-sys.path.insert(0, r'X:\Health\ResearchProjects\EPreatoni\EG-FH1095\Software\gapstat-master\src')
+projectdir = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(projectdir, 'additional_modules'))
 from gapstat import gapstat
 import tkinter as tk
 from yellowbrick.cluster import KElbowVisualizer
@@ -45,6 +46,10 @@ import matplotlib.colors as mcolors
 class HierarchClusteringAnalysisTool:
 
 # TODO. Make GUI fit in any screen size
+
+    """
+    A GUI to choose the number of clusters for hierarchical clustering based on internal validity scores and visualisation.
+    """
 
     def __init__(self, data, **kwargs):
 
@@ -265,6 +270,11 @@ class HierarchClusteringAnalysisTool:
             n_clusters = n_cluster_choice.get()
             self.n_clusters = int(n_clusters)
 
+            # Apply hierarchical clustering with final choice of  n_clusters
+            self.dendrofig = plt.figure(figsize=(6.5, 1.5))
+            self.clustlabels, self.dendro, self.finalscore_table, self.linkmat, _ = hierarch_clust(self.data, self.n_clusters, self.kwargs['labels'])
+            self.dendroax = plt.gca()
+
             # Close the window
             master.quit()
             master.destroy()
@@ -278,6 +288,15 @@ class HierarchClusteringAnalysisTool:
 
 
 def hierarch_clust(X, n_clusters, datalabels):
+
+    """
+    Perform hierarchical clustering and return labels, dendrogram, scores and linkage matrix
+
+    :param X: input data
+    :param n_clusters: number of clusters
+    :param datalabels: labels for the data
+    :return:
+    """
 
     # Fit model
     hrcal_model = AgglomerativeClustering(n_clusters=n_clusters)
@@ -323,6 +342,9 @@ def hierarch_clust(X, n_clusters, datalabels):
 
 def plot_dendrogram(model, datalabels, color_threshold=None, orientation='top'):
 
+    """ Plot dendrogram from hierarchical clustering model.
+    """
+
     # Create the counts of samples under each node
     counts = np.zeros(model.children_.shape[0])
     n_samples = len(model.labels_)
@@ -365,7 +387,70 @@ def append_bottom_leaves_dendrogram(dendroax, labelcolour=[]):
     plt.draw()
 
 
+def add_dendro_legend(dendroax, colourid):
+    """
+    Sets up a legend for a dendrogram axis using provided color labels and data. It also includes the number of points
+    in each cluster in the legend.
+
+    Parameters:
+    - dendroax: The axis object containing the dendrogram where the legend is applied.
+    - colourid: DataFrame or Series containing 'colourcode' entries for each cluster.
+    """
+
+    # Unique colourcodes for temporary legend
+    # Get unique colourcodes
+    templegend = list(colourid['colourcode'].unique())
+    templegend.insert(0, '_nolegend')
+    legend = dendroax.legend(templegend, frameon=False)
+
+    # Get handles and their colours
+    handlecolours = [handle.get_color() for handle in legend.legendHandles]
+
+    # Get labels which should be the same as the CN colourcode in matplotlib
+    leglabels = [label.get_text() for label in legend.get_texts()]
+    leglabelcolours = [mcolors.to_rgba(leglabel) for leglabel in leglabels]
+
+    # Get indices of leglabelcolours in handlecolours
+    idcs = []
+    for handlecolour in handlecolours:
+        for leglabi, leglabelcolour in enumerate(leglabelcolours):
+            if np.all(handlecolour == leglabelcolour):
+                idcs.append(leglabi)
+                break
+
+    # Get the colourcode again and order them correctly
+    finalcolours = list(colourid['colourcode'].unique())
+
+    orderedcolours = [finalcolours[idx] for idx in idcs]
+
+    # Get count of pts in each cluster
+    clustcount = [len(colourid.loc[colourid['colourcode'] == colourlabel]) for colourlabel in orderedcolours]
+
+    # Subtract 1 from the digit in finalcolours
+    orderedcolours = [orderedcolours[:-1] + str(int(orderedcolours[-1]) - 1) for orderedcolours in orderedcolours]
+
+    # Add count of pts in each cluster
+    orderedcolours = [f'{orderedcolour} ({clustcounti})' for orderedcolour, clustcounti in
+                      zip(orderedcolours, clustcount)]
+
+    # Set the legend correctly now
+    orderedcolours.insert(0, '_nolegend')
+    dendroax.legend(orderedcolours, frameon=False)
+
+    plt.tight_layout()
+
+
 def tsne_plot(X, perplexities, colours, **kwargs):
+
+    """
+    Plots t-SNE for different perplexities.
+
+    :param X: input data
+    :param perplexities: list of perplexities
+    :param colours: colours for each data point
+    :param kwargs: it can be used to pass ringcolours, title and labels
+    :return:
+    """
 
     # Get kwargs
     ringcolours = kwargs.get('ringcolours', colours)
@@ -477,6 +562,11 @@ def corrmat_plot(array, figsize=(5, 5)):
 
 class TransitionAnalysis:
 
+    """
+    A class to analyse transitions between two clustering partitions. It allows to recolour the dendrogram based on the
+    transitions between the two partitions.
+    """
+
     def __init__(self, prev_colourid, curr_colourid, dendroax):
 
         self.prev_colourid = prev_colourid
@@ -574,17 +664,31 @@ class TransitionAnalysisGUI:
         self.master.attributes("-topmost", True)
         self.master.focus_force()
 
-        # Display transitions
+        # Instructions frame
         topframe = tk.Frame(self.master)
         topframe.grid(row=0, column=0)
+
+        # Display instructions
+        instructstr = ('Indicate the colour replacements based on \n'
+                       'the transitions below and the dendrogram on the right. \n'
+                       'Vlines in the dendrogram represent the colour \n'
+                       'of that datapoint in the previous clustering partition.')
+
+        instructholder = tk.StringVar(topframe, instructstr)
+        instructions = tk.Label(topframe, textvariable=instructholder)
+        instructions.grid(row=0, column=0)
+
+        # Display transitions
+        top2frame = tk.Frame(self.master)
+        top2frame.grid(row=1, column=0)
         transitionstring = '    ' + self.transitions.to_string(index=False)
-        transitionholder = tk.StringVar(topframe, transitionstring)
-        dflabel = tk.Label(topframe, textvariable=transitionholder)
+        transitionholder = tk.StringVar(top2frame, transitionstring)
+        dflabel = tk.Label(top2frame, textvariable=transitionholder)
         dflabel.grid(row=0, column=0)
 
         # Colour matching options
         midframe = tk.Frame(self.master)
-        midframe.grid(row=1, column=0)
+        midframe.grid(row=2, column=0)
 
         # All the possible colours in the transitions
         posscolours = np.unique(pd.concat([self.transitions['prev'], self.transitions['post']]))
@@ -606,7 +710,7 @@ class TransitionAnalysisGUI:
 
         # Accept frame
         bottomframe = tk.Frame(self.master)
-        bottomframe.grid(row=2, column=0)
+        bottomframe.grid(row=4, column=0)
 
         # Create Accept button
         acceptbutton = tk.Button(bottomframe, text='Accept', command=self.accept)
@@ -629,6 +733,12 @@ class TransitionAnalysisGUI:
 
 
 class CustomScaler(BaseEstimator, TransformerMixin):
+
+    """
+    A custom standard scaler that can be used with sklearn pipelines. It allows to standardise data based on a
+    variable tracker that indicates which variables belong to which group. This is useful when the data is not
+    standardised only in a column by column basis but also in a group basis e.g., temporal data.
+    """
 
     def fit(self, X, y=None, vartracker=None):
 
@@ -700,6 +810,18 @@ def make_splitgrid(nrows, ncols=None, figsize=(19.2, 9.77)):
 
 
 def comparison_0D_contvar_indgroups(datadict, grouping, title_kword, figdir, colours):
+
+    """
+    Compares 0D variables in different groups using parametric and non-parametric tests. It also plots Q-Q plots for
+    normality.
+
+    :param datadict: dictionary with data
+    :param grouping: grouping of the data
+    :param title_kword: title keyword for the plots
+    :param figdir: directory to save figures
+    :param colours: colours
+    :return:
+    """
 
     disc_comp = {}
 

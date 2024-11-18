@@ -7,6 +7,7 @@ Created on Thu Dec 29 10:58:19 2022
 
 # %% Imports
 import os
+import warnings
 import datetime
 import itertools
 import numpy as np
@@ -26,6 +27,21 @@ import copy
 
 def rec_analysis(X, Xz, pcaed, scalerobj, pcaobj, wantedvars, vartracker, stage, reportdir, colour):
 
+    """
+    Perform reconstruction analysis for the PCAed data.
+
+    :param X: data in original space
+    :param Xz: X but standardised
+    :param pcaed: data projected into PCA space
+    :param scalerobj: scaler object used to standardise data
+    :param pcaobj: pca object used to project data
+    :param wantedvars: wanted variables for reconstruction analysis
+    :param vartracker: vartracker used for 1D variables in saler
+    :param stage: running stage
+    :param reportdir: report directory to save figures
+    :param colour: colour for plots
+    :return:
+    """
 
     if stage == 'multispeed':
 
@@ -116,8 +132,6 @@ def rec_analysis(X, Xz, pcaed, scalerobj, pcaobj, wantedvars, vartracker, stage,
 
             recaxs['topaxs'][vari].set_title(kinematics_titles[varname])
             recaxs['topaxs'][vari].set_ylabel(short_ylabels[vari])
-            recaxs['topaxs'][vari].spines['right'].set_visible(False)
-            recaxs['topaxs'][vari].spines['top'].set_visible(False)
             recaxs['topaxs'][vari].set_xticks([])
 
         # Decorate recfig
@@ -129,14 +143,14 @@ def rec_analysis(X, Xz, pcaed, scalerobj, pcaobj, wantedvars, vartracker, stage,
         recaxs['topaxs'][1].set_ylim(ylims[0] - 0.05 * ylims[1], ylims[1] + 0.05 * ylims[1])
 
         # Round current yticks in duty factor top axs figure
-        yticks = recaxs['topaxs'][1].get_yticks()
-        recaxs['topaxs'][1].set_yticklabels(np.round(yticks, 3))
+        recaxs['topaxs'][1].set_yticklabels(np.round(recaxs['topaxs'][1].get_yticks(), 3))
         recaxs['bottomaxs'][0].set_xticks([1], ['Direct PCA 99'])
         recaxs['bottomaxs'][0].set_xlim([0.5, 1.5])
         recaxs['bottomaxs'][1].set_xticks([1], ['Direct PCA 99'])
         recaxs['bottomaxs'][1].set_xlim([0.5, 1.5])
 
         for vari, (var, ax) in enumerate(zip(acceptable_errors.keys(), recaxs['bottomaxs'])):
+
             # Add horizontal lines to indicate acceptable errors
             ax.hlines(y=acceptable_errors[var],
                       xmin=ax.get_xlim()[0],
@@ -147,16 +161,14 @@ def rec_analysis(X, Xz, pcaed, scalerobj, pcaobj, wantedvars, vartracker, stage,
                       xmax=ax.get_xlim()[1],
                       color='k', linestyle=':')
 
-            # Remove right spines
-            ax.spines['right'].set_visible(False)
+            # Make top spine visible
+            ax.spines['top'].set_visible(True)
 
             # Set ylims
             ax.set_ylim(recbot_ylims[vari])
 
             # Set yticks
             ax.set_yticks([-acceptable_errors[var], acceptable_errors[var]])
-
-            print(f'{var} ylims: {ax.get_ylim()}')
 
         # Set ylabels
         recaxs['bottomaxs'][0].set_ylabel('Error')
@@ -193,7 +205,11 @@ def rec_analysis(X, Xz, pcaed, scalerobj, pcaobj, wantedvars, vartracker, stage,
 
 
 def write_spm_stats_str(spmobj, mode='full'):
-    """Write stats string for spmobj"""
+
+    """
+    Write stats string from spmobj. Mode can be full, just stat or just p.
+
+    """
 
     # Make sure mode is full, stat or p
     if mode not in ['full', 'stat', 'p']:
@@ -228,10 +244,13 @@ def write_spm_stats_str(spmobj, mode='full'):
 
 
 def add_sig_spm_cluster_patch(ax, spmobj, tscaler=1):
+
     """
-    :param ax:
-    :param spmobj:
-    :param tscaler:
+    Add a patch where a significant difference is found (cluster in SPM literature).
+
+    :param ax: axis where the patch will be added
+    :param spmobj: spm1d object
+    :param tscaler: scaler for the x axis (to show x axis in 0-100 scale for example)
     :return:
     """
 
@@ -242,58 +261,202 @@ def add_sig_spm_cluster_patch(ax, spmobj, tscaler=1):
                                    ylim[1] - ylim[0], color='grey', alpha=0.5, linestyle=''))
 
 
-def add_dendro_legend(dendroax, colourid):
+def write_0Dposthoc_statstr(posthoctable, contrastvalue, withinfactor, withinfactorvalue):
     """
-    Sets up a legend for a dendrogram axis using provided color labels and data. It also includes the number of points
-    in each cluster in the legend.
+    Write stats string for 0D posthoc tests
 
-    Parameters:
-    - dendroax: The axis object containing the dendrogram where the legend is applied.
-    - currentcolourlabels: DataFrame or Series containing 'colourcode' entries for each cluster.
-    - curr_colourid: DataFrame with 'colourcode' column containing data points for each cluster.
+    :param posthoctable: pengouin pairwise_tests output
+    :param contrastvalue: name of the contrast
+    :param withinfactor: name of the within factor
+    :param withinfactorvalue: value of the within factor
+    :return: string with stats for plots
     """
 
-    # Unique colourcodes for temporary legend
-    # Get unique colourcodes
-    templegend = list(colourid['colourcode'].unique())
-    templegend.insert(0, '_nolegend')
-    legend = dendroax.legend(templegend, frameon=False)
+    t = np.round(posthoctable['T'].loc[
+                     (posthoctable['Contrast'] == contrastvalue) & (
+                                 posthoctable[withinfactor] == withinfactorvalue)].values[
+                     0], 2)
+    d = np.round(posthoctable['cohen'].loc[
+                     (posthoctable['Contrast'] == contrastvalue) & (
+                                 posthoctable[withinfactor] == withinfactorvalue)].values[
+                     0], 2)
+    if posthoctable['p-corr'].loc[
+        (posthoctable['Contrast'] == contrastvalue) & (posthoctable[withinfactor] == withinfactorvalue)].values[
+        0] < 0.001:
+        p = '< 0.001'
+    else:
+        p = np.round(posthoctable['p-corr'].loc[
+                         (posthoctable['Contrast'] == contrastvalue) & (
+                                     posthoctable[withinfactor] == withinfactorvalue)].values[
+                         0], 3)
 
-    # Get handles and their colours
-    handlecolours = [handle.get_color() for handle in legend.legendHandles]
+    return f't = {t}, p = {p}, d = {d}'
 
-    # Get labels which should be the same as the CN colourcode in matplotlib
-    leglabels = [label.get_text() for label in legend.get_texts()]
-    leglabelcolours = [mcolors.to_rgba(leglabel) for leglabel in leglabels]
 
-    # Get indices of leglabelcolours in handlecolours
-    idcs = []
-    for handlecolour in handlecolours:
-        for leglabi, leglabelcolour in enumerate(leglabelcolours):
-            if np.all(handlecolour == leglabelcolour):
-                idcs.append(leglabi)
-                break
+def write_0DmixedANOVA_statstr(mixed_anovatable, factor1, factor2, factor1label='', factor2label=''):
 
-    # Get the colourcode again and order them correctly
-    finalcolours = list(colourid['colourcode'].unique())
+    """
+    Write stats string for 0D mixed ANOVA tests.
 
-    orderedcolours = [finalcolours[idx] for idx in idcs]
+    :param mixed_anovatable: pengouin mixed_anova output
+    :param factor1: factor 1 name in mixed_anovatable
+    :param factor2: factor 2 name in mixed_anovatable
+    :param factor1label: label corresponding to factor 1 for the string
+    :param factor2label: label corresponding to factor 2 for the string
+    :return: string with stats for plots
+    """
 
-    # Get count of pts in each cluster
-    clustcount = [len(colourid.loc[colourid['colourcode'] == colourlabel]) for colourlabel in orderedcolours]
+    # Get factor labels or set them to factor names if not provided
+    if factor1label == '':
+        factor1label = factor1
+    if factor2label == '':
+        factor2label = factor2
 
-    # Subtract 1 from the digit in finalcolours
-    orderedcolours = [orderedcolours[:-1] + str(int(orderedcolours[-1]) - 1) for orderedcolours in orderedcolours]
+    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == factor1].values < 0.001:
+        statstr = f'{factor1label}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, p < 0.001'
+    else:
+        statstr = f'{factor1label}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, p = {np.round(mixed_anovatable["p-unc"].values[0], 3)}'
 
-    # Add count of pts in each cluster
-    orderedcolours = [f'{orderedcolour} ({clustcounti})' for orderedcolour, clustcounti in
-                      zip(orderedcolours, clustcount)]
+    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'speed'].values < 0.001:
+        statstr += f'; {factor2label}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, p < 0.001'
+    else:
+        statstr += f'; {factor2label}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, p = {np.round(mixed_anovatable["p-unc"].values[1], 3)}'
 
-    # Set the legend correctly now
-    orderedcolours.insert(0, '_nolegend')
-    dendroax.legend(orderedcolours, frameon=False)
+    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'Interaction'].values < 0.001:
+        statstr += f'; {factor1label}x{factor2label}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, p < 0.001'
+    else:
+        statstr += f'; {factor1label}x{factor2label}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, p = {np.round(mixed_anovatable["p-unc"].values[2], 2)}'
 
+    return statstr
+
+
+
+
+def single_speed_kinematics_comparison(cluster_data, discvars, contvars, reportdir, savingkwstr, stg_title, kinematics_titles, kinematics_ylabels):
+
+    """
+    Perform 0D and 1D statistical comparisons and plot kinematics for a single speed.
+
+    :param cluster_data: data containing variables and labels
+    :param discvars: name of discrete variables
+    :param contvars: name of continuous variables
+    :param reportdir: report directory
+    :param savingkwstr: keyword for saving figures
+    :param stg_title: title for figure
+    :param kinematics_titles: titles for kinematics variables
+    :param kinematics_ylabels: ylabels for kinematics variables
+    :return:
+    """
+
+
+    # Get unique cluster labels and corresponding colours
+    uniqclustlabels = natsort.natsorted(np.unique(cluster_data['ptlabels']['clustlabel']))
+    uniqclustcolours = [cluster_data['ptlabels']['colourcode'].loc[
+                            cluster_data['ptlabels']['clustlabel'] == x].iloc[0] for x in uniqclustlabels]
+
+    # if len of uniqclustlabels is different from 2, return and write a warning
+    if len(uniqclustlabels) != 2:
+        warnings.warn(f'{len(uniqclustlabels)} clusters were identified for {stg_title}.\n '
+                      f'This function is limited to 2 clusters to replicate the results in Rivadulla et al. (2024).\n '
+                      f'If you identified more clusters, you will have to extend the functionality of '
+                      f'this code by yourself ;)', category=UserWarning)
+        return None
+
+    # Perform 0D and 1D statistical comparisons
+    stat_comparison = {'0D': {}, '1D': {}}
+    stat_comparison['0D'] = comparison_0D_contvar_indgroups({key: cluster_data[key] for key in discvars},
+                                                                   cluster_data['ptlabels']['clustlabel'],
+                                                                   savingkwstr,
+                                                                   reportdir,
+                                                                   uniqclustcolours)
+
+    stat_comparison['1D'] = comparison_1D_contvar_indgroups({key: cluster_data[key] for key in contvars},
+                                                                   cluster_data['ptlabels']['clustlabel'],
+                                                                   savingkwstr,
+                                                                   reportdir,
+                                                                   uniqclustcolours)
+
+    # Plot all variables with significant differences indicated
+    kinfig, kinaxs = plt.subplots(2, 4, figsize=(11, 4.5))
+    kinaxs = kinaxs.flatten()
+
+    # Get avge toe off for each cluster to show in the  SPM plots
+    avgeto = []
+    for clusti, uniqclust in enumerate(uniqclustlabels):
+        clustidcs = np.where(cluster_data['ptlabels']['clustlabel'] == uniqclust)[0]
+        avgeto.append(np.round(np.mean(cluster_data['DUTYFACTOR'][clustidcs, :]) * 100, 1))
+
+    for vari, varname in enumerate(discvars + contvars):
+
+        # 0D variables
+        if varname in discvars:
+
+            # Violin plot
+            sns.violinplot(ax=kinaxs[vari],
+                           x=cluster_data[f'ptlabels']['clustlabel'].values,
+                           y=cluster_data[varname].flatten(),
+                           palette=uniqclustcolours)
+
+            # Xticks
+            kinaxs[vari].set_xticklabels([f'C{int(x)}' for x in kinaxs[vari].get_xticks()])
+
+            # Get key which is not normality
+            stat_test = [key for key in stat_comparison['0D'][varname].keys() if key != 'normality'][0]
+
+            # Add asterisk to the title to indicate significant differences
+            if stat_comparison['0D'][varname][stat_test]['p'] < 0.05:
+                kinaxs[vari].set_title(f'{kinematics_titles[varname]} *')
+            else:
+                kinaxs[vari].set_title(f'{kinematics_titles[varname]}')
+
+        # 1D variables
+        elif varname in contvars:
+
+            groups = []
+
+            for clusti, uniqclust in enumerate(uniqclustlabels):
+                clustidcs = np.where(cluster_data[f'ptlabels']['clustlabel'] == uniqclust)[0]
+                groups.append(cluster_data[varname][clustidcs, :])
+
+                # SPM plot
+                spm1d.plot.plot_mean_sd(groups[-1], x=np.linspace(0, 100, groups[-1].shape[1]),
+                                        linecolor=uniqclustcolours[clusti], facecolor=uniqclustcolours[clusti],
+                                        ax=kinaxs[vari])
+
+            # Add vertical line at avge toe off (outside the previous loop so we can get the final ylimits)
+            for clusti, clustavgeto in enumerate(avgeto):
+                kinaxs[vari].axvline(x=clustavgeto, color=uniqclustcolours[clusti], linestyle=':')
+
+            # Add patch to indicate significant differences
+            spmtest = list(stat_comparison['1D'][varname].keys())[0]
+            if stat_comparison['1D'][varname][spmtest].h0reject:
+
+                # Scaler for sigcluster endpoints
+                tscaler = kinaxs[vari].get_xlim()[1] / (groups[0].shape[1] - 1)
+
+                # Add significant patches
+                add_sig_spm_cluster_patch(kinaxs[vari], stat_comparison['1D'][varname][spmtest],
+                                          tscaler=tscaler)
+
+            # title
+            kinaxs[vari].set_title(kinematics_titles[varname])
+
+        # Add ylabel
+        kinaxs[vari].set_ylabel(kinematics_ylabels[varname])
+
+    # Legend
+    # create cluster labels as C and the number
+    kinaxs[-1].legend([f'C{int(x)}' for x in uniqclustlabels], loc='lower right', frameon=False)
+
+    # Suptitle
+    kinfig.suptitle(f'{stg_title} kinematics')
     plt.tight_layout()
+
+    # Save and close
+    kinfig.savefig(os.path.join(reportdir, f'{savingkwstr}_kinematics.png'), dpi=300, bbox_inches='tight')
+    plt.close(kinfig)
+
+    return stat_comparison
 
 
 # %% Defaults
@@ -327,6 +490,10 @@ kindatapath = os.path.join(datadir, 'AllCurves_ptavgs.npy')
 matplotlib.use('Qt5Agg')
 matplotlib.style.use('default')
 
+# Update default rcParams
+plt.rcParams['axes.spines.top'] = False
+plt.rcParams['axes.spines.right'] = False
+
 # Saving filename
 savefilename = 'PCA_speed_by_speed_clustering'
 savingkw = 'Clust'
@@ -338,9 +505,9 @@ stages = ['STG_02', 'STG_03', 'STG_04']
 speeds = [9 + int(stage[-2:]) for stage in stages]
 
 # Wanted variables for clustering
-wantedvars = ['STRIDEFREQ', 'DUTYFACTOR', 'RCOM_2', 'RTRUNK2PELVIS_0', 'RPELV_ANG_0', 'RHIP_0', 'RKNEE_0', 'RANK_0']
 discvars = ['STRIDEFREQ', 'DUTYFACTOR']
 contvars = ['RCOM_2', 'RTRUNK2PELVIS_0', 'RPELV_ANG_0', 'RHIP_0', 'RKNEE_0', 'RANK_0']
+wantedvars = discvars + contvars
 
 # For figure decoration
 stgtitles = ['11 km/h', '12 km/h', '13 km/h', 'Multispeed']
@@ -423,9 +590,6 @@ demoanthrophysvars_ylabels = {'Sex': 'Females (%)',
                               'Time10Ks': 'mm:ss',
                               'RE': 'kcal/min/kg',
                               }
-
-# revars_ylabels = {'RE': 'kcal/min/kg',
-#                   'RELT': 'kcal/km/kg'}
 
 # Speed linestyles
 speedcolours = ['C0', 'C6', 'C3']
@@ -544,8 +708,6 @@ clust_scores = pd.DataFrame(columns=['Silhouette', 'Calinski-Harabasz', 'Davies-
 dendros = []
 labels = []
 ptlabels = {}
-refcolours = []
-linkmats = []
 ami = {}
 scores_by_k = {}
 stat_comparison = {}
@@ -569,57 +731,40 @@ for stgi, stage in enumerate(clustdata.keys()):
     # Perform reconstruction analysis
     dr_scores[stage] = rec_analysis(X, Xz, pcaed, scaler, pca, wantedvars, vartracker[stage], stage, reportdir, recqualcolours[stgi])
 
-    # Hierarchical clustering analysis to choose number of clusters
-    HCA = HierarchClusteringAnalysisTool(pcaed)
-
-    # Save individual scores for wearables study
-    if stage == 'multispeed':
-        sampsilh = pd.DataFrame(data=np.array([pts, HCA.Silhouette_samples[HCA.n_clusters]]).T,
-                                columns=['ptcode', 'Silhouette'])
-        sampsilh.to_csv(os.path.join(reportdir, 'Multispeed_ptsilhouette.csv'), index=False)
-
-    # Store scores
-    for scorename in wanted_scores.keys():
-        scores_by_k[stage][scorename] = HCA.scores[scorename]
-
-    # Apply hierarchical clustering with final choice of  n_clusters
-    dendrofig = plt.figure(figsize=(6.5, 1.5))
-    clustlabels, dendro, score_table, linkmat, _ = hierarch_clust(pcaed, HCA.n_clusters, pts)
-    dendroax = plt.gca()
-    dendroax.set_title(f'Recoloring {stage}. Try to colour-match the leaves and bottom vert lines')
+    # Hierarchical clustering analysis
+    HCA = HierarchClusteringAnalysisTool(pcaed, labels=pts)
 
     # Store results
+    for scorename in wanted_scores.keys():
+        scores_by_k[stage][scorename] = HCA.scores[scorename]
     clust_scores.loc[stage] = HCA.scores.loc[HCA.n_clusters]
-    dendros.append(dendro)
-    linkmats.append(linkmat)
+    dendros.append(HCA.dendro)
 
     # Make plots a bit prettier
     if len(dendros) == 1:
         # Add bottom leaves to dendrogram
-        append_bottom_leaves_dendrogram(dendroax)
+        append_bottom_leaves_dendrogram(HCA.dendroax)
 
         # Set title adding the Silhouette score
-        dendroax.set_title(f'{stgtitles[stgi]} '
-                           f'(Silh = {np.round(score_table.loc["Silhouette"].values[0], 3)})')
+        HCA.dendroax.set_title(f'{stgtitles[stgi]} '
+                           f'(Silh = {np.round(HCA.finalscore_table.loc["Silhouette"].values[0], 3)})')
 
     # Get participant labels and colours from dendrogram
     colourid = pd.DataFrame({'ptcode': dendros[-1]['ivl'], 'colourcode': dendros[-1]['leaves_color_list']}).sort_values(
         by=['ptcode'], ignore_index=True)
-    colourid['clustlabel'] = 0
+
+    # Get unique colours and create a clustlabel variable for every colour
     colours = np.sort(colourid['colourcode'].unique())
+    colourid['clustlabel'] = 0
     for label, colourcode in enumerate(colours):
-        colourid.loc[colourid['colourcode'] == colourcode, 'clustlabel'] = label
+        colourid.loc[colourid['colourcode'] == colourcode, 'clustlabel'] = int(label)
 
     if len(dendros) == 1:
 
         # Add legend to dendrogram including count of pts in each cluster
-        add_dendro_legend(dendroax, colourid)
+        add_dendro_legend(HCA.dendroax, colourid)
 
-        # TSNE plot
-        tsnefig = tsne_plot(pcaed, [5, 10, 15, 20], colourid['colourcode'], labels=colourid['ptcode'],
-                            title=f'TSNE_{stage}')
-
-        # Store results here and there. Note there might be some of these you don't need and can delete
+        # Store results
         labels.append(colourid['clustlabel'].tolist())
         ptlabels[stage] = colourid
         clustdata[stage]['ptlabels'] = colourid
@@ -627,21 +772,16 @@ for stgi, stage in enumerate(clustdata.keys()):
     # Make colours consistent with previous iteration
     elif len(dendros) > 1:
 
-        append_bottom_leaves_dendrogram(dendroax, labelcolour=ptlabels[stages[stgi - 1]])
+        append_bottom_leaves_dendrogram(HCA.dendroax, labelcolour=ptlabels[stages[stgi - 1]])
 
         # Transition analysis from previous to current partition
-        trans_analysis = TransitionAnalysis(ptlabels[stages[stgi - 1]], colourid, dendroax)
+        trans_analysis = TransitionAnalysis(ptlabels[stages[stgi - 1]], colourid, HCA.dendroax)
         trans_analysis.dendroax.set_title(f'{stgtitles[stgi]} '
-                                          f'(Silh = {np.round(score_table.loc["Silhouette"].values[0], 3)}, '
+                                          f'(Silh = {np.round(HCA.finalscore_table.loc["Silhouette"].values[0], 3)}, '
                                           f'AMI = {np.round(trans_analysis.ami, 3)})')
 
-        # Write legend. This is currently disgusting but it seems to work
-        add_dendro_legend(dendroax, trans_analysis.curr_colourid)
-
-        # Colour edge according to previous speed for easier visualisation of betrayers
-        tsnefig = tsne_plot(pcaed, [5, 10, 15, 20], colourid['colourcode'],
-                            ringcolours=ptlabels[stages[stgi - 1]]['colourcode'],
-                            labels=colourid['ptcode'], title=f'{stage} TSNE')
+        # Write legend
+        add_dendro_legend(HCA.dendroax, trans_analysis.curr_colourid)
 
         # Store labels and ptlabels
         labels.append(trans_analysis.curr_colourid['clustlabel'].tolist())
@@ -652,112 +792,26 @@ for stgi, stage in enumerate(clustdata.keys()):
 
     # Save and close figures
     HCA.scorefig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_HCA_scores.png'), dpi=300, bbox_inches='tight')
-    dendrofig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_finaldendro.png'), dpi=300, bbox_inches='tight')
-    tsnefig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_tsne.png'), dpi=300, bbox_inches='tight')
+    HCA.dendrofig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_finaldendro.png'), dpi=300, bbox_inches='tight')
     plt.close(HCA.scorefig)
     plt.close(HCA.dendrofig)
-    plt.close(dendrofig)
-    plt.close(tsnefig)
+    plt.close(HCA.dendrofig)
 
     # Get unique clustlabels and corresponding colour
     uniqclustlabels = natsort.natsorted(np.unique(clustdata[stage]['ptlabels']['clustlabel']))
     uniqclustcolours = [clustdata[stage]['ptlabels']['colourcode'].loc[
                             clustdata[stage]['ptlabels']['clustlabel'] == x].iloc[0] for x in uniqclustlabels]
 
-    # Stat comparison of single speed clustering TODO. The plotting part is not ready for more than two groups
+    #%% Stat comparison of single speed clustering
     if stage != 'multispeed':
-        stat_comparison[stage] = {'0D': {}, '1D': {}}
-        stat_comparison[stage]['0D'] = comparison_0D_contvar_indgroups({key: clustdata[stage][key] for key in discvars},
-                                                                       clustdata[stage]['ptlabels']['clustlabel'],
-                                                                       f'{savingkw}_{stage}',
-                                                                       reportdir,
-                                                                       uniqclustcolours)
-
-        stat_comparison[stage]['1D'] = comparison_1D_contvar_indgroups({key: clustdata[stage][key] for key in contvars},
-                                                                       clustdata[stage]['ptlabels']['clustlabel'],
-                                                                       f'{savingkw}_{stage}',
-                                                                       reportdir,
-                                                                       uniqclustcolours)
-
-        # Plot all variables with significant differences indicated
-        kinfig, kinaxs = plt.subplots(2, 4, figsize=(11, 4.5))
-        kinaxs = kinaxs.flatten()
-
-        avgeto = []
-        for clusti, uniqclust in enumerate(uniqclustlabels):
-            clustidcs = np.where(clustdata[stage]['ptlabels']['clustlabel'] == uniqclust)[0]
-            avgeto.append(np.round(np.mean(clustdata[stage]['DUTYFACTOR'][clustidcs, :]) * 100, 1))
-
-        for vari, varname in enumerate(wantedvars):
-
-            if varname in discvars:
-
-                # Violin plot
-                sns.violinplot(ax=kinaxs[vari],
-                               x=clustdata[stage][f'ptlabels']['clustlabel'].values,
-                               y=clustdata[stage][varname].flatten(),
-                               palette=uniqclustcolours)
-
-                # Xticks
-                kinaxs[vari].set_xticks([0, 1], ['C0', 'C1'])
-
-                # Get key which is not normality
-                stat_test = [key for key in stat_comparison[stage]['0D'][varname].keys() if key != 'normality'][0]
-
-                # Add asterisk to the title to indicate significant differences
-                if stat_comparison[stage]['0D'][varname][stat_test]['p'] < 0.05:
-                    kinaxs[vari].set_title(f'{kinematics_titles[varname]} *')
-                else:
-                    kinaxs[vari].set_title(f'{kinematics_titles[varname]}')
-
-            elif varname in contvars:
-
-                groups = []
-
-                for clusti, uniqclust in enumerate(uniqclustlabels):
-                    clustidcs = np.where(clustdata[stage][f'ptlabels']['clustlabel'] == uniqclust)[0]
-                    groups.append(clustdata[stage][varname][clustidcs, :])
-
-                    # SPM plot
-                    spm1d.plot.plot_mean_sd(groups[-1], x=np.linspace(0, 100, groups[-1].shape[1]),
-                                            linecolor=uniqclustcolours[clusti], facecolor=uniqclustcolours[clusti],
-                                            ax=kinaxs[vari])
-
-                # Add vertical line at avge toe off (outside the previous loop so we can get the final ylimits)
-                for clusti, clustavgeto in enumerate(avgeto):
-                    kinaxs[vari].axvline(x=clustavgeto, color=uniqclustcolours[clusti], linestyle=':')
-
-                # Add patch to indicate significant differences
-                spmtest = list(stat_comparison[stage]['1D'][varname].keys())[0]
-                if stat_comparison[stage]['1D'][varname][spmtest].h0reject:
-
-                    # Scaler for sigcluster endpoints
-                    tscaler = kinaxs[vari].get_xlim()[1] / (groups[0].shape[1] - 1)
-
-                    # Add significant patches
-                    add_sig_spm_cluster_patch(kinaxs[vari], stat_comparison[stage]['1D'][varname][spmtest],
-                                              tscaler=tscaler)
-
-                # title
-                kinaxs[vari].set_title(kinematics_titles[varname])
-
-            # Add ylabel
-            kinaxs[vari].set_ylabel(kinematics_ylabels[varname])
-
-            # Rid off top and right spines
-            kinaxs[vari].spines['right'].set_visible(False)
-            kinaxs[vari].spines['top'].set_visible(False)
-
-        # Legend
-        kinaxs[-1].legend(['C0', 'C1'], loc='lower right', frameon=False)
-
-        # Suptitle
-        kinfig.suptitle(f'{stgtitles[stgi]} kinematics')
-        plt.tight_layout()
-
-        # Save and close
-        kinfig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_kinematics.png'), dpi=300, bbox_inches='tight')
-        plt.close(kinfig)
+        stat_comparison[stage] = single_speed_kinematics_comparison(clustdata[stage],
+                                                                    discvars,
+                                                                    contvars,
+                                                                    reportdir,
+                                                                    f'{savingkw}_{stage}',
+                                                                    stgtitles[stgi],
+                                                                    kinematics_titles,
+                                                                    kinematics_ylabels)
 
 # Save multispeed ptlabels to file
 clustdata['multispeed']['ptlabels'].to_csv(os.path.join(reportdir, f'{savingkw}_multispeed_ptlabels.csv'), index=False)
@@ -778,8 +832,6 @@ for scorei, scorename in enumerate(wanted_scores.keys()):
 
     scoreaxs[scorei].set_xlabel('k')
     scoreaxs[scorei].set_title(scorename)
-    scoreaxs[scorei].spines['right'].set_visible(False)
-    scoreaxs[scorei].spines['top'].set_visible(False)
     scoreaxs[scorei].text(0.98, 0.98, f'optimum: {wanted_scores[scorename]}', ha='right', va='top',
                           transform=scoreaxs[scorei].transAxes)
 
@@ -877,34 +929,12 @@ stat_comparison['multispeed']['demophysanthro']['EE']['ANOVA2onerm'] = pg.mixed_
                                                                                       effsize='np2',
                                                                                       correction=True)
 
-# Get avge EE for each cluster at each speed
-avgeedf = redf.groupby(['clustlabel', 'speed']).mean().reset_index()
-
 # Run post-hoc tests
 stat_comparison['multispeed']['demophysanthro']['EE']['posthocs'] = pg.pairwise_tests(dv='EE', within='speed',
                                                                                       subject='ptcode',
                                                                                       between='clustlabel',
                                                                                       data=redf, padjust='bonf',
                                                                                       effsize='cohen')
-
-# # RE with relative LT speeds. Create numpy array of nans
-# reltdf = np.empty((len(pts), 3))
-# reltdf[:] = np.nan
-#
-# for speedi, speed in enumerate(speeds):
-#     for pti, pt in enumerate(pts):
-#         if selmaster[f'LT{speed}pctge'].loc[pt] > 70 and selmaster[f'LT{speed}pctge'].loc[pt] <= 80:
-#             reltdf[pti, 0] = selmaster[f'EE{speed}kmkg'].loc[pt]
-#         elif selmaster[f'LT{speed}pctge'].loc[pt] > 80 and selmaster[f'LT{speed}pctge'].loc[pt] <= 90:
-#             reltdf[pti, 1] = selmaster[f'EE{speed}kmkg'].loc[pt]
-#         elif selmaster[f'LT{speed}pctge'].loc[pt] > 90 and selmaster[f'LT{speed}pctge'].loc[pt] <= 100:
-#             reltdf[pti, 2] = selmaster[f'EE{speed}kmkg'].loc[pt]
-#
-# # Convert to dataframe
-# reltdf = pd.DataFrame(data=reltdf.flatten(), columns=['EEkmkg'])
-# reltdf['LTpctge'] = np.concatenate([[int(speed)] * len(pts) for speed in [75, 85, 95]])
-# reltdf['clustlabel'] = np.tile(clustdata['multispeed']['ptlabels']['clustlabel'].values, 3)
-# reltdf['ptcode'] = np.tile(clustdata['multispeed']['ptlabels']['ptcode'].values, 3)
 
 # Make a table with number of females
 femcount = []
@@ -919,13 +949,15 @@ for vari, varname in enumerate([key for key in demoanthrophysvars_ylabels.keys()
 
         fempctge = []
         sextable = []
+
         for clusti, uniqclust in enumerate(uniqclustlabels):
+
             # Get pts in that cluster
             clustmaster = master.loc[clustdata['multispeed']['ptlabels']['ptcode'].loc[
                 clustdata['multispeed']['ptlabels']['clustlabel'] == uniqclust]]
             fempctge.append(len(clustmaster.loc[clustmaster['Sex'] == 'Female']) / len(clustmaster) * 100)
 
-            # Get number of women and men in that cluster
+            # Get number of females and males in that cluster
             sextable.append([len(clustmaster.loc[clustmaster['Sex'] == 'Female']),
                              len(clustmaster.loc[clustmaster['Sex'] == 'Male'])])
 
@@ -940,7 +972,7 @@ for vari, varname in enumerate([key for key in demoanthrophysvars_ylabels.keys()
         sns.barplot(ax=demoanthrophysaxs[vari], x=uniqclustlabels, y=fempctge, palette=uniqclustcolours)
 
         # Set xticks
-        demoanthrophysaxs[vari].set_xticks([0, 1], ['C0', 'C1'])
+        demoanthrophysaxs[vari].set_xticklabels([f'C{int(x)}' for x in demoanthrophysaxs[vari].get_xticks()])
 
     elif varname == 'RunningDaysAWeek':
 
@@ -965,7 +997,7 @@ for vari, varname in enumerate([key for key in demoanthrophysvars_ylabels.keys()
                        palette=uniqclustcolours)
 
         # Xticks
-        demoanthrophysaxs[vari].set_xticks([0, 1], ['C0', 'C1'])
+        demoanthrophysaxs[vari].set_xticklabels([f'C{int(x)}' for x in demoanthrophysaxs[vari].get_xticks()])
 
     # Yticks for Time10Ks
     if varname == 'Time10Ks':
@@ -978,10 +1010,6 @@ for vari, varname in enumerate([key for key in demoanthrophysvars_ylabels.keys()
 
     # Ylabels
     demoanthrophysaxs[vari].set_ylabel(demoanthrophysvars_ylabels[varname])
-
-    # Spines off
-    demoanthrophysaxs[vari].spines['right'].set_visible(False)
-    demoanthrophysaxs[vari].spines['top'].set_visible(False)
 
     # Title
     if varname in demoanthrophysvars_titles.keys():
@@ -1030,26 +1058,14 @@ for speedi, speed in enumerate(speeds):
                    palette=uniqclustcolours,
                    legend=False)
 
-    # Xticks
-    reaxs[speedi].set_xticks([0, 1], ['C0', 'C1'])
+    # Add C at the start of each xtick
+    reaxs[speedi].set_xticklabels([f'C{int(x)}' for x in reaxs[speedi].get_xticks()])
 
     # Add stats in xlabel
     if mixed_anova['p-unc'].loc[mixed_anova['Source'] == 'clustlabel'].values < 0.05:
-        t = np.round(
-            posthocs['T'].loc[(posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[
-                0], 2)
-        d = np.round(
-            posthocs['cohen'].loc[(posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[
-                0],
-            2)
-        if posthocs['p-corr'].loc[(posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[
-            0] < 0.001:
-            reaxs[speedi].set_xlabel(f'C: t = {t}, p < 0.001, d = {d}', fontsize=10)
-        else:
-            p = np.round(posthocs['p-corr'].loc[
-                             (posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[0],
-                         3)
-            reaxs[speedi].set_xlabel(f'C: t = {t}, p = {p}, d = {d}', fontsize=10)
+        statsstr = write_0Dposthoc_statstr(posthocs, 'speed * clustlabel', 'speed', speed)
+        reaxs[speedi].set_xlabel(f'C: {statsstr}', fontsize=10)
+
     else:
         reaxs[speedi].set_xlabel(' ', fontsize=10)
 
@@ -1058,10 +1074,6 @@ for speedi, speed in enumerate(speeds):
         reaxs[speedi].set_ylabel(demoanthrophysvars_ylabels['RE'])
     else:
         reaxs[speedi].set_ylabel('')
-
-    # Get rid of spines
-    reaxs[speedi].spines['right'].set_visible(False)
-    reaxs[speedi].spines['top'].set_visible(False)
 
     # Add title
     reaxs[speedi].set_title(f'{speed} km/h')
@@ -1072,62 +1084,18 @@ for ax in reaxs:
     ax.set_ylim([min([ylim[0] for ylim in ylims]), max([ylim[1] for ylim in ylims])])
 
 # Set suptitle
-if mixed_anova['p-unc'].loc[mixed_anova['Source'] == 'clustlabel'].values < 0.001:
-    strstats = f'C: F = {np.round(mixed_anova["F"].values[0], 2)}, p < 0.001'
-else:
-    strstats = f'C: F = {np.round(mixed_anova["F"].values[0], 2)}, p = {np.round(mixed_anova["p-unc"].values[0], 3)}'
-
-if mixed_anova['p-unc'].loc[mixed_anova['Source'] == 'speed'].values < 0.001:
-    strstats += f'; S: F = {np.round(mixed_anova["F"].values[1], 2)}, p < 0.001'
-else:
-    strstats += f'; S: F = {np.round(mixed_anova["F"].values[1], 2)}, p = {np.round(mixed_anova["p-unc"].values[1], 3)}'
-
-if mixed_anova['p-unc'].loc[mixed_anova['Source'] == 'Interaction'].values < 0.001:
-    strstats += f'; CxS: F = {np.round(mixed_anova["F"].values[2], 2)}, p < 0.001'
-else:
-    strstats += f'; CxS: F = {np.round(mixed_anova["F"].values[2], 2)}, p = {np.round(mixed_anova["p-unc"].values[2], 2)}'
+statsstr = write_0DmixedANOVA_statstr(mixed_anova, 'clustlabel', 'speed', factor1label='C', factor2label='S')
 
 # Set title
-refig.suptitle(f'Running economy\n{strstats}')
+refig.suptitle(f'Running economy\n{statsstr}')
 
 # Save and close
 plt.tight_layout()
 refig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_RE_ANOVA2onerm.png'), dpi=300, bbox_inches='tight')
 plt.close(refig)
 
-# # RE variables
-# refig, reaxs = plt.subplots(1, 1, figsize=(6, 2.5))
-# sns.violinplot(ax=reaxs, x='speed', y='EE', hue='clustlabel', data=redf, palette=uniqclustcolours)
-#
-# # Append km/h to each xtick
-# reaxs.set_xticklabels([f'{speed} km/h' for speed in speeds])
-# reaxs.set_xlabel('')
-# reaxs.set_ylabel(demoanthrophysvars_ylabels['RE'])
-# reaxs.spines['right'].set_visible(False)
-# reaxs.spines['top'].set_visible(False)
-# reaxs.set_title('Running Economy')
-#
-# # Legend
-# reaxs.legend(loc='lower center',
-#              bbox_to_anchor=(0.5, 0),
-#              ncol=2,
-#              bbox_transform=refig.transFigure,
-#              frameon=False)
-# plt.subplots_adjust(bottom=0.25)
-#
-# # Get legend
-# legend = reaxs.get_legend()
-#
-# # Change legend labels
-# for clusti, uniqclust in enumerate(uniqclustlabels):
-#     legend.get_texts()[clusti].set_text(f'C{clusti}')
-#
-# # Save and close
-# plt.tight_layout()
-# refig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_RE.png'), dpi=300, bbox_inches='tight')
-# plt.close(refig)
 
-# %% Kineamtic comparison
+# %% Kinematics comparison
 
 # 0D variables: 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
 
@@ -1172,25 +1140,13 @@ for vari, varname in enumerate(discvars):
                        legend=False)
 
         # Xticks
-        discvaraxs[speedi].set_xticks([0, 1], ['C0', 'C1'])
+        discvaraxs[speedi].set_xticklabels([f'C{int(x)}' for x in discvaraxs[speedi].get_xticks()])
 
         # Add stats in xlabel
         if mixed_anova['p-unc'].loc[mixed_anova['Source'] == 'clustlabel'].values < 0.05:
-            t = np.round(
-                posthocs['T'].loc[(posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[
-                    0], 2)
-            d = np.round(posthocs['cohen'].loc[
-                             (posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[0],
-                         2)
-            if posthocs['p-corr'].loc[
-                (posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[
-                0] < 0.001:
-                discvaraxs[speedi].set_xlabel(f'C: t = {t}, p < 0.001, d = {d}', fontsize=11)
-            else:
-                p = np.round(posthocs['p-corr'].loc[
-                                 (posthocs['Contrast'] == 'speed * clustlabel') & (posthocs['speed'] == speed)].values[
-                                 0], 3)
-                discvaraxs[speedi].set_xlabel(f'C: t = {t}, p = {p}, d = {d}', fontsize=11)
+            statsstr = write_0Dposthoc_statstr(posthocs, 'speed * clustlabel', 'speed', speed)
+            discvaraxs[speedi].set_xlabel(f'C: {statsstr}', fontsize=11)
+
         else:
             discvaraxs[speedi].set_xlabel(' ', fontsize=11)
 
@@ -1200,10 +1156,6 @@ for vari, varname in enumerate(discvars):
         else:
             discvaraxs[speedi].set_ylabel('')
 
-        # Get rid of spines
-        discvaraxs[speedi].spines['right'].set_visible(False)
-        discvaraxs[speedi].spines['top'].set_visible(False)
-
         # Add title
         discvaraxs[speedi].set_title(f'{speed} km/h')
 
@@ -1212,27 +1164,9 @@ for vari, varname in enumerate(discvars):
     for ax in discvaraxs:
         ax.set_ylim([min([ylim[0] for ylim in ylims]), max([ylim[1] for ylim in ylims])])
 
-    # Set suptitle
-    if stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['p-unc'].loc[
-        stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['Source'] == 'clustlabel'].values < 0.001:
-        strstats = f'C: F = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["F"].values[0], 2)}, p < 0.001'
-    else:
-        strstats = f'C: F = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["F"].values[0], 2)}, p = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["p-unc"].values[0], 3)}'
-
-    if stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['p-unc'].loc[
-        stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['Source'] == 'speed'].values < 0.001:
-        strstats += f'; S: F = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["F"].values[1], 2)}, p < 0.001'
-    else:
-        strstats += f'; S: F = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["F"].values[1], 2)}, p = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["p-unc"].values[1], 3)}'
-
-    if stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['p-unc'].loc[
-        stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['Source'] == 'Interaction'].values < 0.001:
-        strstats += f'; CxS: F = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["F"].values[2], 2)}, p < 0.001'
-    else:
-        strstats += f'; CxS: F = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["F"].values[2], 2)}, p = {np.round(stat_comparison["multispeed"]["0D"][varname]["ANOVA2onerm"]["p-unc"].values[2], 2)}'
-
-    # Set title
-    discvarfig.suptitle(f'{kinematics_titles[varname]}\n{strstats}')
+    # Set suptitle as the var name and stats
+    statsstr = write_0DmixedANOVA_statstr(mixed_anova, 'clustlabel', 'speed', factor1label='C', factor2label='S')
+    discvarfig.suptitle(f'{kinematics_titles[varname]}\n{statsstr}')
 
     # Save and close
     plt.tight_layout()
@@ -1289,6 +1223,7 @@ for vari, contvar in enumerate(contvars):
 
         # Plot mean and std curves
         for labi, lab in enumerate(np.sort(np.unique(group[-1]))):
+
             # Top row: group by group for each speed
             spm1d.plot.plot_mean_sd(Y[-1][np.where(group[-1] == lab)[0], :],
                                     x=np.linspace(0, 100, Y[-1].shape[1]),
@@ -1335,10 +1270,6 @@ for vari, contvar in enumerate(contvars):
             # xlabel. This ensures they are all the samesize and will get filled with stats if post-hocs were performed
             loweraxs[-1].set_xlabel(' ')
 
-            # Spines off
-            loweraxs[-1].spines['right'].set_visible(False)
-            loweraxs[-1].spines['top'].set_visible(False)
-
             # Legend
             loweraxs[-1].legend(['_nolegend_', 'C0', 'C1'],
                                 loc='lower center',
@@ -1350,10 +1281,6 @@ for vari, contvar in enumerate(contvars):
 
         # Title
         upperaxs[stgi].set_title(stgtitles[stgi])
-
-        # Get rid of spines
-        upperaxs[stgi].spines['right'].set_visible(False)
-        upperaxs[stgi].spines['top'].set_visible(False)
 
     # ylabels
     upperaxs[0].set_ylabel(kinematics_ylabels[contvar])
@@ -1378,8 +1305,6 @@ for vari, contvar in enumerate(contvars):
         speedaxs[vari].axvline(x=spavgeto, color=speedcolours[spavgetoi], linestyle=':')
 
     # title and ylabel for speed figure
-    speedaxs[vari].spines['right'].set_visible(False)
-    speedaxs[vari].spines['top'].set_visible(False)
     speedaxs[vari].set_title(kinematics_titles[contvar])
     speedaxs[vari].set_ylabel(kinematics_ylabels[contvar])
 
@@ -1478,7 +1403,7 @@ for vari, contvar in enumerate(contvars):
 
             # Save figure and close it
             plt.savefig(os.path.join(reportdir,
-                                     f'{savingkw}_{contvar}_interact_posthoc_{speeds[condi + 1]}_v_{speeds[condi]}.png'))
+                                     f'{savingkw}_multispeed_{contvar}_interact_posthoc_{speeds[condi + 1]}_v_{speeds[condi]}.png'))
             plt.close(plt.gcf())
 
             # Add patches to loweraxs if significant diffs are found
