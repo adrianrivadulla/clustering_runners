@@ -16,9 +16,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.ticker import FormatStrFormatter
 import seaborn as sns
 from sklearn.cluster import AgglomerativeClustering
 from sklearn import metrics
+from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import dendrogram
 import sys
 projectdir = os.path.dirname(os.path.realpath(__file__))
@@ -43,6 +45,211 @@ import matplotlib.colors as mcolors
 # %% Utils
 
 
+
+def pca_dimensionality_reduction(datadict, vartracker, stage, figinfodict, pca_varexpthresh=0.99):
+
+    """
+    Perform PCA dimensionality reduction on the given data and assess reconstruction quality.
+
+    Parameters:
+    datadict (dict): Dictionary containing the data to be reduced.
+    vartracker (list): List of variable names corresponding to the columns in the data.
+    stage (str): The stage of the analysis ('multispeed' or 'single speed').
+    figinfodict (dict): Dictionary containing figure information for plotting.
+    pca_varexpthresh (float, optional): The variance explained threshold for PCA. Defaults to 0.99.
+
+    Returns:
+    pcaed (np.ndarray): The PCA-transformed data.
+    dr_scores (pd.DataFrame): DataFrame containing the number of components, MSE, and RMSE for each stage.
+    """
+
+    # Get info from figinfodict
+    reportdir = figinfodict['reportdir']
+    savingkw = figinfodict['savingkw']
+    colour = figinfodict['colour']
+    acceptable_errors = figinfodict['acceptable_errors']
+    kinematics_titles = figinfodict['kinematics_titles']
+    short_ylabels = figinfodict['short_ylabels']
+    recbot_ylims = figinfodict['recbot_ylims']
+
+    # Get wantedvars as the keys of datadict
+    wantedvars = list(datadict.keys())
+
+    # Concatenate data
+    X = np.hstack([datadict[key] for key in datadict.keys()])
+
+    # Standardise data
+    scaler = CustomScaler()
+    Xz = scaler.fit_transform(X, vartracker=vartracker)
+
+    # Apply PCA
+    pca = PCA(n_components=pca_varexpthresh)
+    pcaed = pca.fit_transform(Xz)
+
+    if stage == 'multispeed':
+
+        # Get all the unique strings in vartracker containing wantedvars[0]
+        uniqspeedexts = np.unique([f'_{var.split("_")[-1]}' for var in vartracker if wantedvars[0] in var])
+        titlekw = 'Multispeed'
+        savingkw = 'Multispeed'
+        colours = ['C0', 'C6', 'C3']
+
+    else:
+        uniqspeedexts = ['']
+        titlekw = 'Single speed'
+        savingkw = 'Single_speed'
+
+    #%% Reconstruction quality
+    yhat = pca.inverse_transform(pcaed)
+    mse = metrics.mean_squared_error(Xz, yhat)
+    rmse = metrics.mean_squared_error(Xz, yhat, squared=False)
+
+    # Get row wise mse
+    ptmse = metrics.mean_squared_error(Xz.T, yhat.T, multioutput='raw_values')
+
+    # Sorted ptmse
+    ptmsesorted = np.sort(ptmse)
+
+    # Get index of pt with median mse to be the representative pt
+    medianptidx = np.where(ptmse == ptmsesorted[len(ptmsesorted) // 2])[0][0]
+
+    # Back scale the predicted data
+    yhat_original = scaler.inverse_transform(yhat)
+
+    # Get errors by variable
+    recerrors = yhat_original - X
+    recmeanerrors = np.mean(recerrors, axis=0)
+    rec25pctileerrors = np.quantile(recerrors, 0.025, axis=0)
+    rec975pctileerrors = np.quantile(recerrors, 0.975, axis=0)
+
+    # For each speed extension
+
+    dr_scores = pd.DataFrame(columns=[f'n_components{str(int(pca_varexpthresh*100))}', 'mse', 'rmse'])
+
+    for exti, ext in enumerate(uniqspeedexts):
+
+        # Create grid figure for reconstruction quality assessment
+        recfig, recaxs, gridshape = make_splitgrid(2, int(len(wantedvars) / 2), figsize=(11, 5.75))
+
+        # Plot ground truth curve data in top axs
+        for vari, varname in enumerate(wantedvars):
+
+            # Get varidx
+            varidx = np.where(np.array(vartracker) == f'{varname}{ext}')[0]
+
+            if len(varidx) == 1:
+
+                # Plot ground truth
+                recaxs['topaxs'][vari].plot(X[medianptidx, varidx], '-o', color='k')
+
+                # Plot reconstructed with error
+                recaxs['topaxs'][vari].plot(yhat_original[medianptidx, varidx], '-o', color=colour[exti])
+
+                # Plot  as a point with errorbar
+                recaxs['bottomaxs'][vari].vlines(x=1, ymin=rec25pctileerrors[varidx],
+                                                 ymax=rec975pctileerrors[varidx], color=colour[exti])
+                recaxs['bottomaxs'][vari].plot(1, recmeanerrors[varidx], 'o', color=colour[exti])
+
+
+            else:
+
+                # Plot ground truth
+                recaxs['topaxs'][vari].plot(np.linspace(0, 100, len(X[medianptidx, varidx])),
+                                            X[medianptidx, varidx], color='k')
+
+                # Plot reconstructed with error
+                recaxs['topaxs'][vari].plot(np.linspace(0, 100, len(yhat_original[medianptidx, varidx])),
+                                            yhat_original[medianptidx, varidx],
+                                            color=colour[exti])
+
+                # Plot 95% of the errors
+                recaxs['bottomaxs'][vari].plot(np.linspace(0, 100, len(recmeanerrors[varidx])), recmeanerrors[varidx],
+                                               color=colour[exti])
+                recaxs['bottomaxs'][vari].fill_between(np.linspace(0, 100, len(recmeanerrors[varidx])),
+                                                       rec25pctileerrors[varidx], rec975pctileerrors[varidx],
+                                                       alpha=0.5, color=colour[exti], edgecolor='none')
+
+                # Set xlims
+                recaxs['topaxs'][vari].set_xlim([0, 100])
+                recaxs['bottomaxs'][vari].set_xlim([0, 100])
+
+            recaxs['topaxs'][vari].set_title(kinematics_titles[varname])
+            recaxs['topaxs'][vari].set_ylabel(short_ylabels[vari])
+            recaxs['topaxs'][vari].set_xticks([])
+
+        # Decorate recfig
+
+        # Get ylims of stride frequency and duty factor
+        ylims = recaxs['topaxs'][0].get_ylim()
+        recaxs['topaxs'][0].set_ylim(ylims[0] - 0.05 * ylims[1], ylims[1] + 0.05 * ylims[1])
+        ylims = recaxs['topaxs'][1].get_ylim()
+        recaxs['topaxs'][1].set_ylim(ylims[0] - 0.05 * ylims[1], ylims[1] + 0.05 * ylims[1])
+
+        # Round current yticks in duty factor top axs figure
+        recaxs['topaxs'][1].yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
+        recaxs['bottomaxs'][0].set_xticks([1], ['Direct PCA 99'])
+        recaxs['bottomaxs'][0].set_xlim([0.5, 1.5])
+        recaxs['bottomaxs'][1].set_xticks([1], ['Direct PCA 99'])
+        recaxs['bottomaxs'][1].set_xlim([0.5, 1.5])
+
+        for vari, (var, ax) in enumerate(zip(acceptable_errors.keys(), recaxs['bottomaxs'])):
+
+            # Add horizontal lines to indicate acceptable errors
+            ax.hlines(y=acceptable_errors[var],
+                      xmin=ax.get_xlim()[0],
+                      xmax=ax.get_xlim()[1],
+                      color='k', linestyle=':')
+            ax.hlines(y=-acceptable_errors[var],
+                      xmin=ax.get_xlim()[0],
+                      xmax=ax.get_xlim()[1],
+                      color='k', linestyle=':')
+
+            # Make top spine visible
+            ax.spines['top'].set_visible(True)
+
+            # Set ylims
+            ax.set_ylim(recbot_ylims[vari])
+
+            # Set yticks
+            ax.set_yticks([-acceptable_errors[var], acceptable_errors[var]])
+
+        # Set ylabels
+        recaxs['bottomaxs'][0].set_ylabel('Error')
+        recaxs['bottomaxs'][4].set_ylabel('Error')
+
+        # Add legend
+        recaxs['topaxs'][-1].legend(['Ground Truth', 'Direct PCA 99'],
+                                    loc='lower center',
+                                    bbox_to_anchor=(0.5, 0),
+                                    ncol=5,
+                                    bbox_transform=recfig.transFigure,
+                                    frameon=False)
+        plt.subplots_adjust(bottom=0.11)
+
+        # title and saving
+        if ext == '':
+            recfig.suptitle(f'{titlekw} PCA {str(9 + int(stage[-2:]))} km/h')
+            figpath = os.path.join(reportdir, f'{savingkw}_{stage}_recquality.png')
+
+        else:
+            recfig.suptitle(f'{titlekw} PCA {ext[1:]} km/h')
+            figpath = os.path.join(reportdir, f'{savingkw}_{stage}{ext}_recquality.png')
+
+        # Save figure
+        recfig.savefig(figpath, dpi=300, bbox_inches='tight')
+        print(f'Saving reconstruction analysis figure to {figpath}')
+
+        # Close figure
+        plt.close(recfig)
+
+        # Dimensionality reduction scores
+        dr_scores.loc[f'{stage}{ext}'] = {f'n_components{str(int(pca_varexpthresh*100))}': pcaed.shape[1],
+                                          'mse': mse,
+                                          'rmse': rmse}
+
+    return pcaed, dr_scores
+
+
 class HierarchClusteringAnalysisTool:
 
 # TODO. Make GUI fit in any screen size
@@ -52,6 +259,14 @@ class HierarchClusteringAnalysisTool:
     """
 
     def __init__(self, data, **kwargs):
+
+        """
+        Initialize the HierarchClusteringAnalysisTool.
+
+        Parameters:
+        data (pd.DataFrame or np.ndarray): The data to be clustered.
+        kwargs (dict): Additional keyword arguments for customization.
+        """
 
         self.data = data
         self.kwargs = kwargs
@@ -64,7 +279,6 @@ class HierarchClusteringAnalysisTool:
         hrcal_model = AgglomerativeClustering()
 
         # Choose number of clusters GUI
-        # Display colours and let user choose the ralabelling
         # Create GUI
         master = tk.Tk()
 
@@ -88,7 +302,6 @@ class HierarchClusteringAnalysisTool:
         ax = plt.subplot(4, 2, 1)
         visualiser = KElbowVisualizer(hrcal_model, k=(2, 11), metric='silhouette', timings=False, locate_elbow=False)
         visualiser.fit(data)
-        # visualiser.show()
         plt.title('')
         plt.ylabel('Silhouette')
         plt.xlabel('')
@@ -105,7 +318,6 @@ class HierarchClusteringAnalysisTool:
         ax = plt.subplot(4, 2, 3)
         visualiser = KElbowVisualizer(hrcal_model, k=(2, 11), metric='calinski_harabasz', timings=False, locate_elbow=False)
         visualiser.fit(data)
-        # visualiser.show()
         plt.title('')
         plt.ylabel('Calinski-Harabasz \nIndex')
         ylimits = plt.ylim()
@@ -266,6 +478,11 @@ class HierarchClusteringAnalysisTool:
         # when accept is clicked
         def accept():
 
+            """
+            Accept the selected number of clusters and apply hierarchical clustering
+            with the selected number of clusters.
+            """
+
             # Store selected number of clusters
             n_clusters = n_cluster_choice.get()
             self.n_clusters = int(n_clusters)
@@ -290,12 +507,19 @@ class HierarchClusteringAnalysisTool:
 def hierarch_clust(X, n_clusters, datalabels):
 
     """
-    Perform hierarchical clustering and return labels, dendrogram, scores and linkage matrix
+    Perform hierarchical clustering on the given data and plot the dendrogram.
 
-    :param X: input data
-    :param n_clusters: number of clusters
-    :param datalabels: labels for the data
-    :return:
+    Parameters:
+    X (pd.DataFrame or np.ndarray): The data to be clustered.
+    n_clusters (int): The number of clusters to form.
+    datalabels (list or np.ndarray): The labels for the data points.
+
+    Returns:
+    labels (np.ndarray): Cluster labels for each point.
+    dendro (dict): Dendrogram data.
+    scores (pd.DataFrame): DataFrame containing silhouette, Calinski-Harabasz, and Davies-Bouldin scores.
+    linkage_matrix (np.ndarray): Linkage matrix for the dendrogram.
+    branch_height (float): The height of the branches in the dendrogram.
     """
 
     # Fit model
@@ -342,7 +566,18 @@ def hierarch_clust(X, n_clusters, datalabels):
 
 def plot_dendrogram(model, datalabels, color_threshold=None, orientation='top'):
 
-    """ Plot dendrogram from hierarchical clustering model.
+    """
+    Plot dendrogram from hierarchical clustering model.
+
+    Parameters:
+    model (AgglomerativeClustering): The hierarchical clustering model.
+    datalabels (list or np.ndarray): The labels for the data points.
+    color_threshold (float, optional): The threshold to apply for coloring clusters.
+    orientation (str, optional): The orientation of the dendrogram ('top', 'bottom', 'left', 'right').
+
+    Returns:
+    dendrofig (dict): Dendrogram data.
+    linkage_matrix (np.ndarray): Linkage matrix for the dendrogram.
     """
 
     # Create the counts of samples under each node
@@ -370,6 +605,14 @@ def plot_dendrogram(model, datalabels, color_threshold=None, orientation='top'):
 
 
 def append_bottom_leaves_dendrogram(dendroax, labelcolour=[]):
+
+    """
+    Append bottom leaves to a dendrogram axis and color them according to labelcolour.
+
+    Parameters:
+    dendroax (matplotlib.axes.Axes): The dendrogram axis to modify.
+    labelcolour (pd.DataFrame, optional): DataFrame containing 'colourcode' and 'ptcode' for coloring the leaves. Defaults to an empty list.
+    """
 
     ylim = dendroax.get_ylim()
     ylimlen = ylim[1] - ylim[0]
@@ -562,17 +805,17 @@ def corrmat_plot(array, figsize=(5, 5)):
 
 class TransitionAnalysis:
 
-    # TODO. Embed dendroax in GUI so it gets shown at the same time and it's tidier
 
     """
     A class to analyse transitions between two clustering partitions. It allows to recolour the dendrogram based on the
     transitions between the two partitions.
     """
 
-    def __init__(self, prev_colourid, curr_colourid, dendroax):
+    def __init__(self, prev_colourid, curr_colourid, dendrofig, dendroax):
 
         self.prev_colourid = prev_colourid
         self.curr_colourid = curr_colourid
+        self.dendrofig = dendrofig
         self.dendroax = dendroax
 
         # Get previous colour-label convention
@@ -588,7 +831,7 @@ class TransitionAnalysis:
         self.jointdf, self.transitions = self.get_transitions()
 
         # Transition GUI
-        transGUI = TransitionAnalysisGUI(self.transitions)
+        transGUI = TransitionAnalysisGUI(self.transitions, self.dendrofig)
         recolour = transGUI.recolour
 
         # Get pts with each current label
@@ -656,12 +899,13 @@ class TransitionAnalysisGUI:
     Display colours and let user choose the ralabelling
     """
 
-    def __init__(self, transitions):
+    def __init__(self, transitions, dendrofig):
         self.transitions = transitions
+        self.dendrofig = dendrofig
 
         # Create GUI
         self.master = tk.Tk()
-        self.master.geometry('400x600')
+        self.master.geometry('1000x550')
         self.master.title('Colour matching')
         self.master.attributes("-topmost", True)
         self.master.focus_force()
@@ -671,10 +915,9 @@ class TransitionAnalysisGUI:
         topframe.grid(row=0, column=0)
 
         # Display instructions
-        instructstr = ('Indicate the colour replacements based on \n'
-                       'the transitions below and the dendrogram on the right. \n'
-                       'Vlines in the dendrogram represent the colour \n'
-                       'of that datapoint in the previous clustering partition.')
+        instructstr = ('Indicate the colour replacements based on the transitions and dendrogram below. \n'
+                       'Vlines in the dendrogram represent the colour of that datapoint in the previous '
+                       'clustering partition.')
 
         instructholder = tk.StringVar(topframe, instructstr)
         instructions = tk.Label(topframe, textvariable=instructholder)
@@ -718,6 +961,13 @@ class TransitionAnalysisGUI:
         acceptbutton = tk.Button(bottomframe, text='Accept', command=self.accept)
         acceptbutton.grid(row=0, column=0)
         acceptbutton.focus_force()
+
+        # dendrogram frame
+        dendroframe = tk.Frame(self.master)
+        dendroframe.grid(row=5, column=0)
+        canvas = FigureCanvasTkAgg(self.dendrofig, master=dendroframe)
+        canvas.draw()
+        canvas.get_tk_widget().pack()
 
         tk.mainloop()
 
