@@ -2,8 +2,25 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 import pandas as pd
+import natsort
+from main import *
 
-def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contvars, savingkw, reportdir):
+
+def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvars, figargs):
+
+
+    # Get figargs
+    reportdir = figargs['reportdir']
+    savingkw = figargs['savingkw']
+    speedcolours = figargs['speedcolours']
+    kinematics_ylabels = figargs['kinematics_ylabels']
+    kinematics_titles = figargs['kinematics_titles']
+    stgtitles = figargs['stgtitles']
+
+    # Get group labels and corresponding colours from ['ptlabels'] within datadict
+    grouplabels = natsort.natsorted(np.unique(datadict['multispeed']['ptlabels']['clustlabel']))
+    groupcolours = [datadict['multispeed']['ptlabels']['colourcode'].loc[
+                            datadict['multispeed']['ptlabels']['clustlabel'] == g].iloc[0] for g in grouplabels]
 
 
     # Initialise stat_comparison
@@ -14,22 +31,22 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
         discvarfig, discvaraxs = plt.subplots(1, 3, figsize=(11, 3))
         discvaraxs = discvaraxs.flatten()
 
-        stat_comparison['multispeed']['0D'][varname] = {}
+        stat_comparison['0D'][varname] = {}
 
         # Get data
         df = pd.DataFrame()
-        df[varname] = np.concatenate(clustdata['multispeed'][varname].T)
+        df[varname] = np.concatenate(datadict['multispeed'][varname].T)
         df['speed'] = np.concatenate(
-            [[int(speeds[stgi])] * clustdata['multispeed'][varname].shape[0] for stgi, stage in enumerate(stages)])
-        df['clustlabel'] = np.tile(clustdata['multispeed']['ptlabels']['clustlabel'].values, len(stages))
-        df['ptcode'] = np.tile(clustdata['multispeed']['ptlabels']['ptcode'].values, len(stages))
+            [[int(speeds[stgi])] * datadict['multispeed'][varname].shape[0] for stgi, stage in enumerate(stages)])
+        df['clustlabel'] = np.tile(datadict['multispeed']['ptlabels']['clustlabel'].values, len(stages))
+        df['ptcode'] = np.tile(datadict['multispeed']['ptlabels']['ptcode'].values, len(stages))
 
         # Run 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
-        stat_comparison['multispeed']['0D'][varname] = anova2onerm_0d_and_posthocs(df,
-                                                                                   dv=varname,
-                                                                                   within='speed',
-                                                                                   between='clustlabel',
-                                                                                   subject='ptcode')
+        stat_comparison['0D'][varname] = anova2onerm_0d_and_posthocs(df,
+                                                                     dv=varname,
+                                                                     within='speed',
+                                                                     between='clustlabel',
+                                                                     subject='ptcode')
 
         # Plot results
         for speedi, speed in enumerate(speeds):
@@ -39,16 +56,16 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
                            x='clustlabel',
                            y=varname,
                            data=df.loc[df['speed'] == speed],
-                           palette=uniqclustcolours,
+                           palette=groupcolours,
                            legend=False)
 
             # Xticks
-            discvaraxs[speedi].set_xticklabels([f'C{int(x)}' for x in discvaraxs[speedi].get_xticks()])
+            discvaraxs[speedi].set_xticks(np.arange(len(grouplabels)), grouplabels)
 
             # Add stats in xlabel
-            if stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['p-unc'].loc[
-                stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm']['Source'] == 'clustlabel'].values < 0.05:
-                statsstr = write_0Dposthoc_statstr(stat_comparison['multispeed']['0D'][varname]['posthocs'],
+            if stat_comparison['0D'][varname]['ANOVA2onerm']['p-unc'].loc[
+                stat_comparison['0D'][varname]['ANOVA2onerm']['Source'] == 'clustlabel'].values < 0.05:
+                statsstr = write_0Dposthoc_statstr(stat_comparison['0D'][varname]['posthocs'],
                                                    'speed * clustlabel', 'speed', speed)
                 discvaraxs[speedi].set_xlabel(f'C: {statsstr}', fontsize=11)
 
@@ -70,7 +87,7 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
             ax.set_ylim([min([ylim[0] for ylim in ylims]), max([ylim[1] for ylim in ylims])])
 
         # Set suptitle as the var name and stats
-        statsstr = write_0DmixedANOVA_statstr(stat_comparison['multispeed']['0D'][varname]['ANOVA2onerm'],
+        statsstr = write_0DmixedANOVA_statstr(stat_comparison['0D'][varname]['ANOVA2onerm'],
                                               between='clustlabel',
                                               within='speed',
                                               betweenlabel='C',
@@ -88,22 +105,22 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
     speedfig, speedaxs = plt.subplots(2, 3, figsize=(11, 4.5))
     speedaxs = speedaxs.flatten()
 
-    # Get avge toe off for each speed and for each cluster based on duty factor for the plots
+    # Get avge toe off for each speed and for each group based on duty factor for the plots
     avgeto = {}
     speedavgeto = []
     for stage in stages:
         avgeto[stage] = []
-        for clusti, uniqclust in enumerate(uniqclustlabels):
-            clustidcs = np.where(clustdata[stage]['ptlabels']['clustlabel'] == uniqclust)[0]
-            avgeto[stage].append(np.round(np.mean(clustdata[stage]['DUTYFACTOR'][clustidcs, :]) * 100, 1))
+        for group in grouplabels:
+            groupidcs = np.where(datadict[stage]['ptlabels']['clustlabel'] == group)[0]
+            avgeto[stage].append(np.round(np.mean(datadict[stage]['DUTYFACTOR'][groupidcs, :]) * 100, 1))
 
-        speedavgeto.append(np.round(np.mean(clustdata[stage]['DUTYFACTOR']) * 100, 1))
+        speedavgeto.append(np.round(np.mean(datadict[stage]['DUTYFACTOR']) * 100, 1))
 
     for vari, contvar in enumerate(contvars):
 
-        stat_comparison['multispeed']['1D'][contvar] = {}
+        stat_comparison['1D'][contvar] = {}
 
-        # Initialise data holder
+        # Initialise data holders
         group = []
         speed = []
         subject = []
@@ -123,10 +140,10 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
         for stgi, stage in enumerate(stages):
 
             # Append group speed and subject
-            group.append(clustdata['multispeed']['ptlabels']['clustlabel'].values)
-            speed.append(np.ones(clustdata['multispeed'][varname].shape[0]) * stgi)
-            subject.append(np.arange(len(clustdata['multispeed']['ptlabels']['clustlabel'].values)))
-            Y.append(clustdata[stage][contvar])
+            group.append(datadict['multispeed']['ptlabels']['clustlabel'].values)
+            speed.append(np.ones(datadict['multispeed'][varname].shape[0]) * stgi)
+            subject.append(np.arange(len(datadict['multispeed']['ptlabels']['clustlabel'].values)))
+            Y.append(datadict[stage][contvar])
 
             # Create axis
             upperaxs.append(fig.add_subplot(topgrid[0, stgi]))
@@ -136,12 +153,12 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
                 # Top row: group by group for each speed
                 spm1d.plot.plot_mean_sd(Y[-1][np.where(group[-1] == lab)[0], :],
                                         x=np.linspace(0, 100, Y[-1].shape[1]),
-                                        linecolor=uniqclustcolours[labi], facecolor=uniqclustcolours[labi],
+                                        linecolor=groupcolours[labi], facecolor=groupcolours[labi],
                                         ax=upperaxs[stgi])
 
             # Add vertical line at avge toe off (outside the previous loop so we can get the final ylimits)
             for labi, lab in enumerate(np.sort(np.unique(group[-1]))):
-                upperaxs[stgi].axvline(x=avgeto[stage][labi], color=uniqclustcolours[labi], linestyle=':')
+                upperaxs[stgi].axvline(x=avgeto[stage][labi], color=groupcolours[labi], linestyle=':')
 
             # xlabel. This ensures they are all the same size and will get filled with stats if post-hocs were performed
             upperaxs[stgi].set_xlabel(' ')
@@ -165,13 +182,13 @@ def multispeed_kinematics_comparison(clustdata, stages, speeds, discvars, contva
                 for uni in np.sort(np.unique(group)):
                     spm1d.plot.plot_mean_sd(Ydiff[-1].T[:, group[stgi] == uni].T,
                                             x=np.linspace(0, 100, Ydiff[-1].shape[1]),
-                                            linecolor=colours[uni], facecolor=colours[uni],
+                                            linecolor=groupcolours[uni], facecolor=groupcolours[uni],
                                             ax=loweraxs[-1])
 
                 # Add vline at avge toe off between speeds (outside the previous loop so we can get the final ylimits)
                 for labi, lab in enumerate(np.sort(np.unique(group[-1]))):
                     loweraxs[-1].axvline(x=np.mean([avgeto[stages[stgi - 1]][labi], avgeto[stage][labi]]),
-                                         color=uniqclustcolours[labi], linestyle=':')
+                                         color=groupcolours[labi], linestyle=':')
 
                 # Set title
                 loweraxs[-1].set_title(f'{speeds[stgi]} wrt {speeds[stgi - 1]} km/h')

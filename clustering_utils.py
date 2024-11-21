@@ -10,6 +10,7 @@ Created on Tue February 2023
 
 # %% Imports
 import os
+import warnings
 import natsort
 from itertools import combinations
 import pandas as pd
@@ -46,7 +47,7 @@ import matplotlib.colors as mcolors
 
 
 
-def pca_dimensionality_reduction(datadict, vartracker, stage, figinfodict, pca_varexpthresh=0.99):
+def pca_dimensionality_reduction(datadict, vartracker, stage, figargs, pca_varexpthresh=0.99):
 
     """
     Perform PCA dimensionality reduction on the given data and assess reconstruction quality.
@@ -55,7 +56,7 @@ def pca_dimensionality_reduction(datadict, vartracker, stage, figinfodict, pca_v
     datadict (dict): Dictionary containing the data to be reduced.
     vartracker (list): List of variable names corresponding to the columns in the data.
     stage (str): The stage of the analysis ('multispeed' or 'single speed').
-    figinfodict (dict): Dictionary containing figure information for plotting.
+    figargs (dict): Dictionary containing figure information for plotting.
     pca_varexpthresh (float, optional): The variance explained threshold for PCA. Defaults to 0.99.
 
     Returns:
@@ -63,14 +64,14 @@ def pca_dimensionality_reduction(datadict, vartracker, stage, figinfodict, pca_v
     dr_scores (pd.DataFrame): DataFrame containing the number of components, MSE, and RMSE for each stage.
     """
 
-    # Get info from figinfodict
-    reportdir = figinfodict['reportdir']
-    savingkw = figinfodict['savingkw']
-    colour = figinfodict['colour']
-    acceptable_errors = figinfodict['acceptable_errors']
-    kinematics_titles = figinfodict['kinematics_titles']
-    short_ylabels = figinfodict['short_ylabels']
-    recbot_ylims = figinfodict['recbot_ylims']
+    # Get info from figargs
+    reportdir = figargs['reportdir']
+    savingkw = figargs['savingkw']
+    colour = figargs['colour']
+    acceptable_errors = figargs['acceptable_errors']
+    kinematics_titles = figargs['kinematics_titles']
+    short_ylabels = figargs['short_ylabels']
+    recbot_ylims = figargs['recbot_ylims']
 
     # Get wantedvars as the keys of datadict
     wantedvars = list(datadict.keys())
@@ -251,8 +252,6 @@ def pca_dimensionality_reduction(datadict, vartracker, stage, figinfodict, pca_v
 
 
 class HierarchClusteringAnalysisTool:
-
-# TODO. Make GUI fit in any screen size
 
     """
     A GUI to choose the number of clusters for hierarchical clustering based on internal validity scores and visualisation.
@@ -492,6 +491,17 @@ class HierarchClusteringAnalysisTool:
             self.clustlabels, self.dendro, self.finalscore_table, self.linkmat, _ = hierarch_clust(self.data, self.n_clusters, self.kwargs['labels'])
             self.dendroax = plt.gca()
 
+            # Get participant labels and colours from dendrogram
+            self.colourid = pd.DataFrame(
+                {'datalabels': self.dendro['ivl'], 'colourcode': self.dendro['leaves_color_list']}).sort_values(
+                by=['datalabels'], ignore_index=True)
+
+            # Get unique colours and create a clustlabel variable for every colour
+            self.colours = np.sort(self.colourid['colourcode'].unique())
+            self.colourid['clustlabel'] = 0
+            for label, colourcode in enumerate(self.colours):
+                self.colourid.loc[self.colourid['colourcode'] == colourcode, 'clustlabel'] = int(label)
+
             # Close the window
             master.quit()
             master.destroy()
@@ -631,13 +641,13 @@ def append_bottom_leaves_dendrogram(dendroax, labelcolour=[]):
 
 
 def add_dendro_legend(dendroax, colourid):
+
     """
-    Sets up a legend for a dendrogram axis using provided color labels and data. It also includes the number of points
-    in each cluster in the legend.
+    Add a legend to the dendrogram axis with the correct color codes and cluster counts.
 
     Parameters:
-    - dendroax: The axis object containing the dendrogram where the legend is applied.
-    - colourid: DataFrame or Series containing 'colourcode' entries for each cluster.
+    dendroax (matplotlib.axes.Axes): The dendrogram axis to modify.
+    colourid (pd.DataFrame): DataFrame containing 'colourcode' and 'ptcode' for coloring the leaves.
     """
 
     # Unique colourcodes for temporary legend
@@ -686,14 +696,21 @@ def add_dendro_legend(dendroax, colourid):
 def tsne_plot(X, perplexities, colours, **kwargs):
 
     """
-    Plots t-SNE for different perplexities.
+    Create t-SNE plots for the given data with different perplexities.
 
-    :param X: input data
-    :param perplexities: list of perplexities
-    :param colours: colours for each data point
-    :param kwargs: it can be used to pass ringcolours, title and labels
-    :return:
+    Parameters:
+    X (np.ndarray): The data to be transformed and plotted.
+    perplexities (list): A list of perplexity values for t-SNE.
+    colours (list or np.ndarray): The colors for the data points.
+    kwargs (dict): Additional keyword arguments for customization.
+        - ringcolours (list or np.ndarray, optional): The colors for the edges of the data points. Defaults to the value of 'colours'.
+        - title (str, optional): The title of the plot. Defaults to 't-SNE'.
+        - labels (list, optional): The labels for the data points. Defaults to 'No labels added.' repeated for each data point.
+
+    Returns:
+    matplotlib.figure.Figure: The figure object containing the t-SNE plots.
     """
+
 
     # Get kwargs
     ringcolours = kwargs.get('ringcolours', colours)
@@ -735,8 +752,18 @@ def tsne_plot(X, perplexities, colours, **kwargs):
 def pca_expvar_plot(pca, threhsolds, colours=['r'], threshlabels=[], highlighted=[], title='PCA explained variance'):
 
     """
-    Plots the explained variance of a PCA model
-    TODO: Make it look nice and more flexible.
+    Visualize the explained variance of PCA and plot thresholds.
+
+    Parameters:
+    pca (PCA): The PCA object containing the explained variance ratio.
+    threhsolds (list): List of thresholds for explained variance.
+    colours (list, optional): List of colors for the thresholds. Defaults to ['r'].
+    threshlabels (list, optional): List of labels for the thresholds. Defaults to an empty list.
+    highlighted (list, optional): List of thresholds to be highlighted. Defaults to an empty list.
+    title (str, optional): The title of the plot. Defaults to 'PCA explained variance'.
+
+    Returns:
+    matplotlib.figure.Figure: The figure object containing the explained variance plot.
     """
 
     # Visualise explained variance
@@ -788,7 +815,15 @@ def pca_expvar_plot(pca, threhsolds, colours=['r'], threshlabels=[], highlighted
 def corrmat_plot(array, figsize=(5, 5)):
 
     """
-    Plots a correlation matrix
+    Generate and plot a correlation matrix using a heatmap.
+
+    Parameters:
+    array (np.ndarray): The input data array for which the correlation matrix is to be computed.
+    figsize (tuple, optional): The size of the figure to be created. Defaults to (5, 5).
+
+    Returns:
+    fig (matplotlib.figure.Figure): The figure object containing the heatmap.
+    ax (matplotlib.axes.Axes): The axes object containing the heatmap.
     """
 
     # Generate a correlation matrix
@@ -813,6 +848,16 @@ class TransitionAnalysis:
 
     def __init__(self, prev_colourid, curr_colourid, dendrofig, dendroax):
 
+        """
+        Initialize the TransitionAnalysis class.
+
+        Parameters:
+        prev_colourid (pd.DataFrame): DataFrame containing the previous color IDs and cluster labels.
+        curr_colourid (pd.DataFrame): DataFrame containing the current color IDs and cluster labels.
+        dendrofig (matplotlib.figure.Figure): The dendrogram figure.
+        dendroax (matplotlib.axes.Axes): The dendrogram axis.
+        """
+
         self.prev_colourid = prev_colourid
         self.curr_colourid = curr_colourid
         self.dendrofig = dendrofig
@@ -828,19 +873,18 @@ class TransitionAnalysis:
         self.reppts = list(set(self.curr_colourid['ptcode']).intersection(set(self.prev_colourid['ptcode'])))
 
         # Get transitions
-        self.jointdf, self.transitions = self.get_transitions()
+        self.jointdf, self.unique_transitions = self.get_transitions()
 
         # Transition GUI
-        transGUI = TransitionAnalysisGUI(self.transitions, self.dendrofig)
-        recolour = transGUI.recolour
+        transGUI = TransitionAnalysisGUI(self.unique_transitions, self.dendrofig)
 
         # Get pts with each current label
         currcolourpts = []
-        for lab in recolour.keys():
+        for lab in transGUI.recolour.keys():
             currcolourpts.append(self.curr_colourid['ptcode'].loc[self.curr_colourid['clustlabel'] == int(lab)].to_list())
 
         # Replace labels and colours
-        for colourptsidcs, (oldlab, newlab) in zip(currcolourpts, recolour.items()):
+        for colourptsidcs, (oldlab, newlab) in zip(currcolourpts, transGUI.recolour.items()):
             self.curr_colourid['clustlabel'].loc[self.curr_colourid['ptcode'].isin(colourptsidcs)] = int(newlab)
 
             # Replace colour Cn colour code using old colours and then new colours as exception
@@ -859,38 +903,44 @@ class TransitionAnalysis:
         self.updatedjointdf, self.updatedtransitions = self.get_transitions()
 
         # Calculate AMI scores
-        self.ami = metrics.adjusted_mutual_info_score(self.updatedjointdf['prev'], self.updatedjointdf['curr'])
+        self.ami = metrics.adjusted_mutual_info_score(self.updatedjointdf['prev_clustlabel'], self.updatedjointdf['curr_clustlabel'])
 
     def get_transitions(self):
+        """
+         Get the transitions between the previous and current clustering partitions.
 
-        # Get joint dataframe
+         Returns:
+         jointdf (pd.DataFrame): DataFrame containing the joint data of previous and current partitions.
+         unique_transitions (pd.DataFrame): DataFrame containing the unique transitions and their counts.
+         """
+
         previous = self.prev_colourid.loc[self.prev_colourid['ptcode'].isin(self.reppts)]
-        previous = previous.drop(columns='colourcode')
-        previous = previous.rename(columns={'clustlabel': 'prev'})
         current = self.curr_colourid.loc[self.curr_colourid['ptcode'].isin(self.reppts)]
-        current = current.drop(columns='colourcode')
-        current = current.rename(columns={'clustlabel': 'curr'})
+
+        # Make ptcode the index
+        previous = previous.set_index('ptcode')
+        current = current.set_index('ptcode')
+
+        # Add prefix to columns
+        previous = previous.add_prefix('prev_')
+        current = current.add_prefix('curr_')
+
+        # Merge them on ptcode
         jointdf = pd.merge(previous, current, on='ptcode')
-        jointdf = jointdf.set_index('ptcode')
 
         # Count unique transitions
-        un, count = np.unique(jointdf, axis=0, return_counts=True)
-        transitions = pd.DataFrame({'prev': un[:, 0], 'post': un[:, 1], 'count': count})
+        unique_transitions = jointdf.value_counts().reset_index(name='count')
 
-        # Calculate count relative to count in prev and post cluster
-        transitions['rel_count_prev'] = 0
-        transitions['rel_count_post'] = 0
+        # Relative counts
+        unique_transitions['rel_count_prev'] = 0
+        unique_transitions['rel_count_post'] = 0
+        for i, row in unique_transitions.iterrows():
+            unique_transitions['rel_count_prev'].iloc[i] = row['count'] / np.sum(
+                unique_transitions['count'].loc[unique_transitions['prev_clustlabel'] == row['prev_clustlabel']])
+            unique_transitions['rel_count_post'].iloc[i] = row['count'] / np.sum(
+                unique_transitions['count'].loc[unique_transitions['curr_clustlabel'] == row['curr_clustlabel']])
 
-        for i, row in transitions.iterrows():
-            transitions['rel_count_prev'].iloc[i] = row['count'] / np.sum(
-                transitions['count'].loc[transitions['prev'] == row['prev']])
-            transitions['rel_count_post'].iloc[i] = row['count'] / np.sum(
-                transitions['count'].loc[transitions['post'] == row['post']])
-
-        # Sort by count
-        transitions = transitions.sort_values(by='count', ascending=False)
-
-        return jointdf, transitions
+        return jointdf, unique_transitions
 
 class TransitionAnalysisGUI:
 
@@ -899,13 +949,34 @@ class TransitionAnalysisGUI:
     Display colours and let user choose the ralabelling
     """
 
-    def __init__(self, transitions, dendrofig):
-        self.transitions = transitions
+    def __init__(self, unique_transitions, dendrofig):
+
+        """
+        Initialize the TransitionAnalysisGUI class.
+
+        Parameters:
+        unique_transitions (pd.DataFrame): DataFrame containing the unique transitions and their counts.
+        dendrofig (matplotlib.figure.Figure): The dendrogram figure.
+        """
+
+        self.unique_transitions = unique_transitions
         self.dendrofig = dendrofig
+
+        # Create transitions df for GUI. Make a copy of unique_transitions
+        self.brief_transitions = self.unique_transitions.copy()
+        # Drop columns containing clustlabel
+        self.brief_transitions = self.brief_transitions.drop(columns=['prev_clustlabel', 'curr_clustlabel'])
+
+        # Replace colourcodes with their corresponding colour in matplotlib as a string
+        self.brief_transitions['prev_colourcode'] = self.brief_transitions['prev_colourcode'].apply(
+            self.convert_cncode_to_colour)
+        self.brief_transitions['curr_colourcode'] = self.brief_transitions['curr_colourcode'].apply(
+            self.convert_cncode_to_colour)
 
         # Create GUI
         self.master = tk.Tk()
         self.master.geometry('1000x550')
+        self.master.configure(bg='white')
         self.master.title('Colour matching')
         self.master.attributes("-topmost", True)
         self.master.focus_force()
@@ -915,9 +986,10 @@ class TransitionAnalysisGUI:
         topframe.grid(row=0, column=0)
 
         # Display instructions
-        instructstr = ('Indicate the colour replacements based on the transitions and dendrogram below. \n'
-                       'Vlines in the dendrogram represent the colour of that datapoint in the previous '
-                       'clustering partition.')
+        instructstr = ('Indicate the colours for the new dendrogram based on the transitions and visualisation below. \n'
+                       'The dendrogram displayed ignores the previous partition. The vlines underneath represent the \n'
+                       'colour of that datapoint in the previous clustering partition.\n'
+                       'The aim is to recolour the dendrogram if needed to maximise the colour match between the two partitions. \n')
 
         instructholder = tk.StringVar(topframe, instructstr)
         instructions = tk.Label(topframe, textvariable=instructholder)
@@ -926,7 +998,7 @@ class TransitionAnalysisGUI:
         # Display transitions
         top2frame = tk.Frame(self.master)
         top2frame.grid(row=1, column=0)
-        transitionstring = '    ' + self.transitions.to_string(index=False)
+        transitionstring = '    ' + self.brief_transitions.to_string(index=False)
         transitionholder = tk.StringVar(top2frame, transitionstring)
         dflabel = tk.Label(top2frame, textvariable=transitionholder)
         dflabel.grid(row=0, column=0)
@@ -936,22 +1008,23 @@ class TransitionAnalysisGUI:
         midframe.grid(row=2, column=0)
 
         # All the possible colours in the transitions
-        posscolours = np.unique(pd.concat([self.transitions['prev'], self.transitions['post']]))
+        posscolours = np.unique(pd.concat([self.brief_transitions['prev_colourcode'],
+                                           self.brief_transitions['curr_colourcode']]))
 
-        self.currlabels = {}
-        self.corrlabels = []
+        self.currcols = {}
+        self.correctcols = []
 
-        for i, currlabel in enumerate(np.unique(self.transitions['post'])):
+        for i, currcol in enumerate(np.unique(self.brief_transitions['curr_colourcode'])):
 
             # Write current colour in a string
-            self.currlabels[currlabel] = tk.Label(midframe, textvariable=tk.StringVar(midframe, currlabel))
-            self.currlabels[currlabel].grid(column=0, row=i)
+            self.currcols[currcol] = tk.Label(midframe, textvariable=tk.StringVar(midframe, currcol))
+            self.currcols[currcol].grid(column=0, row=i)
 
             # Write possible colours to replace current colour
-            corrlabel = tk.StringVar(midframe, currlabel)
-            menu = tk.OptionMenu(midframe, corrlabel, *np.unique(posscolours))
+            currcol = tk.StringVar(midframe, currcol)
+            menu = tk.OptionMenu(midframe, currcol, *np.unique(posscolours))
             menu.grid(column=1, row=i)
-            self.corrlabels.append(corrlabel)
+            self.correctcols.append(currcol)
 
         # Accept frame
         bottomframe = tk.Frame(self.master)
@@ -971,13 +1044,55 @@ class TransitionAnalysisGUI:
 
         tk.mainloop()
 
+    # Retrieve the color from the default color cycle
+    def convert_cncode_to_colour(self, colstr, inverse_transform=False):
+
+        """
+        Retrieve the color from the default color cycle.
+
+        Parameters:
+        colstr (str): The color code string.
+        inverse_transform (bool, optional): Whether to perform inverse transformation. Defaults to False.
+
+        Returns:
+        str: The corresponding color string.
+        """
+
+        tableau_colours = {'C0': ('blue'),
+                           'C1': ('orange'),
+                           'C2': ('green'),
+                           'C3': ('red'),
+                           'C4': ('purple'),
+                           'C5': ('brown'),
+                           'C6': ('pink'),
+                           'C7': ('gray'),
+                           'C8': ('yellow-green'),
+                           'C9': ('cyan')}
+        if inverse_transform:
+            return {value: key for key, value in tableau_colours.items()}[colstr]
+        else:
+            return tableau_colours[colstr]
+
+
     # when accept is clicked
     def accept(self):
 
+        """
+        Accept the selected color matching and update the recolour dictionary.
+        """
+
         # Store current label and correct label (new)
         self.recolour = {}
-        for currlabel, corrlabel in zip(self.currlabels, self.corrlabels):
-            self.recolour[str(currlabel)] = corrlabel.get()
+        for currcol, correctcol in zip(self.currcols, self.correctcols):
+
+            # Get label corresponding to current colour in unique transition
+            currcncode = self.convert_cncode_to_colour(currcol, inverse_transform=True)
+            correctcncode = self.convert_cncode_to_colour(correctcol.get(), inverse_transform=True)
+
+            # Get corresponding label in unique transition current column
+            currlabel = self.unique_transitions['curr_clustlabel'].loc[self.unique_transitions['curr_colourcode'] == currcncode].values[0]
+            correctlabel = self.unique_transitions['curr_clustlabel'].loc[self.unique_transitions['curr_colourcode'] == correctcncode].values[0]
+            self.recolour[str(currlabel)] = correctlabel
 
         # Close the window
         self.master.quit()
@@ -987,12 +1102,24 @@ class TransitionAnalysisGUI:
 class CustomScaler(BaseEstimator, TransformerMixin):
 
     """
-    A custom standard scaler that can be used with sklearn pipelines. It allows to standardise data based on a
-    variable tracker that indicates which variables belong to which group. This is useful when the data is not
-    standardised only in a column by column basis but also in a group basis e.g., temporal data.
+    A custom scaler class for standardizing data based on variable-specific means and standard deviations.
+    It uses vartracker to know what columns belong to the same variable to calculate the mean and std for each variable.
+    This is useful when scaling e.g., time series.
     """
 
     def fit(self, X, y=None, vartracker=None):
+
+        """
+        Fit the scaler to the data.
+
+        Parameters:
+        X (np.ndarray): The data to fit.
+        y (None, optional): Ignored, present for compatibility. Defaults to None.
+        vartracker (list, optional): List of variable names corresponding to the columns in the data. Defaults to None.
+
+        Returns:
+        self: Fitted scaler instance.
+        """
 
         self.vartracker_ = vartracker
 
@@ -1011,6 +1138,16 @@ class CustomScaler(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
 
+        """
+        Transform the data using the fitted scaler.
+
+        Parameters:
+        X (np.ndarray): The data to transform.
+
+        Returns:
+        np.ndarray: The standardized data.
+        """
+
         Xz = np.zeros(X.shape)
 
         # Standardise data
@@ -1022,12 +1159,35 @@ class CustomScaler(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, X, y=None, vartracker=None):
 
+        """
+         Fit the scaler to the data and then transform it.
+
+         Parameters:
+         X (np.ndarray): The data to fit and transform.
+         y (None, optional): Ignored, present for compatibility. Defaults to None.
+         vartracker (list, optional): List of variable names corresponding to the columns in the data. Defaults to None.
+
+         Returns:
+         np.ndarray: The standardized data.
+         """
+
         self.fit(X, y, vartracker)
         Xz = self.transform(X)
 
         return Xz
 
     def inverse_transform(self, Xz, y=None):
+
+        """
+        Inverse transform the standardized data back to the original scale.
+
+        Parameters:
+        Xz (np.ndarray): The standardized data to inverse transform.
+        y (None, optional): Ignored, present for compatibility. Defaults to None.
+
+        Returns:
+        np.ndarray: The data in the original scale.
+        """
 
         X = np.zeros(Xz.shape)
 
@@ -1040,6 +1200,20 @@ class CustomScaler(BaseEstimator, TransformerMixin):
 
 
 def make_splitgrid(nrows, ncols=None, figsize=(19.2, 9.77)):
+
+    """
+    Create a grid of subplots with specified number of rows and columns.
+
+    Parameters:
+    nrows (int): Number of rows in the grid.
+    ncols (int, optional): Number of columns in the grid. Defaults to the value of nrows.
+    figsize (tuple, optional): Size of the figure to be created. Defaults to (19.2, 9.77).
+
+    Returns:
+    fig (matplotlib.figure.Figure): The figure object containing the grid.
+    axs (dict): A dictionary containing the axes objects for the top and bottom subplots.
+    rows_x_cols (list): A list containing the number of rows and columns in the grid.
+    """
 
     if ncols is None:
         ncols = nrows
@@ -1064,15 +1238,17 @@ def make_splitgrid(nrows, ncols=None, figsize=(19.2, 9.77)):
 def comparison_0D_contvar_indgroups(datadict, grouping, title_kword, figdir, colours):
 
     """
-    Compares 0D variables in different groups using parametric and non-parametric tests. It also plots Q-Q plots for
-    normality.
+    Compare continuous variables between independent groups using various statistical tests.
 
-    :param datadict: dictionary with data
-    :param grouping: grouping of the data
-    :param title_kword: title keyword for the plots
-    :param figdir: directory to save figures
-    :param colours: colours
-    :return:
+    Parameters:
+    datadict (dict): Dictionary containing the data to be compared.
+    grouping (list or np.ndarray): List or array containing the group labels for each data point.
+    title_kword (str): Keyword to be used in the title of the plots.
+    figdir (str): Directory where the plots will be saved.
+    colours (list or np.ndarray): List or array containing the colors for the groups.
+
+    Returns:
+    disc_comp (dict): A dictionary containing the results of the statistical tests.
     """
 
     disc_comp = {}
@@ -1191,6 +1367,20 @@ def comparison_0D_contvar_indgroups(datadict, grouping, title_kword, figdir, col
 
 
 def comparison_1D_contvar_indgroups(datadict, grouping, title_kword, figdir, colours):
+
+    """
+    Compare continuous variables between independent groups using traditional SPM1D non-parametric tests.
+
+    Parameters:
+    datadict (dict): Dictionary containing the data to be compared.
+    grouping (list or np.ndarray): List or array containing the group labels for each data point.
+    title_kword (str): Keyword to be used in the title of the plots.
+    figdir (str): Directory where the plots will be saved.
+    colours (list or np.ndarray): List or array containing the colors for the groups.
+
+    Returns:
+    cont_comp (dict): A dictionary containing the results of the statistical tests.
+    """
 
     # Conduct traditional SPM1D non-param tests
     cont_comp = {}
@@ -1316,10 +1506,19 @@ def comparison_1D_contvar_indgroups(datadict, grouping, title_kword, figdir, col
 
 # 3D distance
 def dist3D(a, b):
-    # Calculate the Ukelele distance
-    dist = np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
 
-    return dist
+    """
+    Calculate the 3D Euclidean distance between two points.
+
+    Parameters:
+    a (array-like): The first point, with coordinates [x, y, z].
+    b (array-like): The second point, with coordinates [x, y, z].
+
+    Returns:
+    float: The Euclidean distance between points a and b.
+    """
+
+    return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
 
 #  # TODO. Create opensim utils file with all of these because it gives dll imort errors
 # def list_to_osim_array_str(list_str):
@@ -1471,3 +1670,702 @@ def dist3D(a, b):
 #         filedata = '\n'.join(filedata)
 #         with open(os.path.join(reportdir, f'Clust_{clust}.osim'), 'w') as file:
 #             file.write(filedata)
+
+def single_speed_kinematics_comparison(datadict, discvars, contvars, figargs):
+
+    """
+    Compare kinematic variables between two groups at a single speed and visualize the results.
+
+    Parameters:
+    datadict (dict): Dictionary containing the data to be compared.
+    discvars (list): List of discrete variables to be compared.
+    contvars (list): List of continuous variables to be compared.
+    figargs (dict): Dictionary containing figure arguments for plotting.
+
+    Returns:
+    stat_comparison (dict): A dictionary containing the results of the statistical tests.
+    """
+
+    # Get figure arguments
+    reportdir = figargs['reportdir']
+    savingkw = figargs['savingkw']
+    study_title = figargs['study_title']
+    kinematics_titles = figargs['kinematics_titles']
+    kinematics_ylabels = figargs['kinematics_ylabels']
+
+    # Get group labels and corresponding colours from ['ptlabels'] within datadict
+    grouplabels = natsort.natsorted(np.unique(datadict['ptlabels']['clustlabel']))
+    groupcolours = [datadict['ptlabels']['colourcode'].loc[
+                            datadict['ptlabels']['clustlabel'] == g].iloc[0] for g in grouplabels]
+
+    # if len of grouplabels is different from 2, return and write a warning
+    if len(grouplabels) != 2:
+        warnings.warn(f'{len(grouplabels)} clusters were identified for {study_title}.\n '
+                      f'This function is limited to 2 clusters to replicate the results in Rivadulla et al. (2024).\n '
+                      f'If you identified more clusters, you will have to extend the functionality of '
+                      f'this code by yourself ;)', category=UserWarning)
+        return None
+
+    # Perform 0D and 1D statistical comparisons
+    stat_comparison = {'0D': {}, '1D': {}}
+    stat_comparison['0D'] = comparison_0D_contvar_indgroups({key: datadict[key] for key in discvars},
+                                                                   datadict['ptlabels']['clustlabel'],
+                                                                   savingkw,
+                                                                   reportdir,
+                                                                   groupcolours)
+
+    stat_comparison['1D'] = comparison_1D_contvar_indgroups({key: datadict[key] for key in contvars},
+                                                                   datadict['ptlabels']['clustlabel'],
+                                                                   savingkw,
+                                                                   reportdir,
+                                                                   groupcolours)
+
+    # Plot all variables with significant differences indicated
+    kinfig, kinaxs = plt.subplots(2, 4, figsize=(11, 4.5))
+    kinaxs = kinaxs.flatten()
+
+    # Get avge toe off for each cluster to show in the  SPM plots
+    avgeto = []
+    for grouplabel in grouplabels:
+        groupidcs = np.where(datadict['ptlabels']['clustlabel'] == grouplabel)[0]
+        avgeto.append(np.round(np.mean(datadict['DUTYFACTOR'][groupidcs, :]) * 100, 1))
+
+    for vari, varname in enumerate(discvars + contvars):
+
+        # 0D variables
+        if varname in discvars:
+
+            # Violin plot
+            sns.violinplot(ax=kinaxs[vari],
+                           x=datadict['ptlabels']['clustlabel'].values,
+                           y=datadict[varname].flatten(),
+                           hue=datadict['ptlabels']['clustlabel'].values,
+                           palette=groupcolours,
+                           legend=False)
+
+            # Xticks
+            kinaxs[vari].set_xticks(kinaxs[vari].get_xticks(),
+                                    [f'C{int(x)}' for x in kinaxs[vari].get_xticks()])
+
+            # Get key which is not normality
+            stat_test = [key for key in stat_comparison['0D'][varname].keys() if key != 'normality'][0]
+
+            # Add asterisk to the title to indicate significant differences
+            if stat_comparison['0D'][varname][stat_test]['p'] < 0.05:
+                kinaxs[vari].set_title(f'{kinematics_titles[varname]} *')
+            else:
+                kinaxs[vari].set_title(f'{kinematics_titles[varname]}')
+
+        # 1D variables
+        elif varname in contvars:
+
+            groups = []
+
+            for clusti, grouplabel in enumerate(grouplabels):
+                clustidcs = np.where(datadict[f'ptlabels']['clustlabel'] == grouplabel)[0]
+                groups.append(datadict[varname][clustidcs, :])
+
+                # SPM plot
+                spm1d.plot.plot_mean_sd(groups[-1], x=np.linspace(0, 100, groups[-1].shape[1]),
+                                        linecolor=groupcolours[clusti], facecolor=groupcolours[clusti],
+                                        ax=kinaxs[vari])
+
+            # Add vertical line at avge toe off (outside the previous loop so we can get the final ylimits)
+            for groupi, groupavgeto in enumerate(avgeto):
+                kinaxs[vari].axvline(x=groupavgeto, color=groupcolours[groupi], linestyle=':')
+
+            # Add patch to indicate significant differences
+            spmtest = list(stat_comparison['1D'][varname].keys())[0]
+            if stat_comparison['1D'][varname][spmtest].h0reject:
+
+                # Scaler for sigcluster endpoints
+                tscaler = kinaxs[vari].get_xlim()[1] / (groups[0].shape[1] - 1)
+
+                # Add significant patches
+                add_sig_spm_cluster_patch(kinaxs[vari], stat_comparison['1D'][varname][spmtest],
+                                          tscaler=tscaler)
+
+            # title
+            kinaxs[vari].set_title(kinematics_titles[varname])
+
+        # Add ylabel
+        kinaxs[vari].set_ylabel(kinematics_ylabels[varname])
+
+    # Legend
+    # create cluster labels as C and the number
+    kinaxs[-1].legend([f'C{int(grouplabel)}' for grouplabel in grouplabels], loc='lower right', frameon=False)
+
+    # Suptitle
+    kinfig.suptitle(f'{study_title} kinematics')
+    plt.tight_layout()
+
+    # Save and close
+    kinfig.savefig(os.path.join(reportdir, f'{savingkw}_kinematics.png'), dpi=300, bbox_inches='tight')
+    plt.close(kinfig)
+
+    return stat_comparison
+
+
+def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvars, figargs):
+
+    """
+    Compare kinematic variables between multiple speeds and visualize the results.
+
+    Parameters:
+    datadict (dict): Dictionary containing the data to be compared.
+    stages (list): List of stages for the analysis.
+    speeds (list): List of speeds corresponding to each stage.
+    discvars (list): List of discrete variables to be compared.
+    contvars (list): List of continuous variables to be compared.
+    figargs (dict): Dictionary containing figure arguments for plotting.
+
+    Returns:
+    stat_comparison (dict): A dictionary containing the results of the statistical tests.
+    """
+
+    # Get figargs
+    reportdir = figargs['reportdir']
+    savingkw = figargs['savingkw']
+    speedcolours = figargs['speedcolours']
+    kinematics_ylabels = figargs['kinematics_ylabels']
+    kinematics_titles = figargs['kinematics_titles']
+    stg_titles = figargs['stg_titles']
+
+    # Get group labels and corresponding colours from ['ptlabels'] within datadict
+    grouplabels = natsort.natsorted(np.unique(datadict['multispeed']['ptlabels']['clustlabel']))
+    groupcolours = [datadict['multispeed']['ptlabels']['colourcode'].loc[
+                            datadict['multispeed']['ptlabels']['clustlabel'] == g].iloc[0] for g in grouplabels]
+
+    # Initialise stat_comparison
+    stat_comparison = {'0D': {}, '1D': {}}
+
+    # 0D variables: 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
+    for vari, varname in enumerate(discvars):
+        discvarfig, discvaraxs = plt.subplots(1, 3, figsize=(11, 3))
+        discvaraxs = discvaraxs.flatten()
+
+        stat_comparison['0D'][varname] = {}
+
+        # Get data
+        df = pd.DataFrame()
+        df[varname] = np.concatenate(datadict['multispeed'][varname].T)
+        df['speed'] = np.concatenate(
+            [[int(speeds[stgi])] * datadict['multispeed'][varname].shape[0] for stgi, stage in enumerate(stages)])
+        df['clustlabel'] = np.tile(datadict['multispeed']['ptlabels']['clustlabel'].values, len(stages))
+        df['ptcode'] = np.tile(datadict['multispeed']['ptlabels']['ptcode'].values, len(stages))
+
+        # Run 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
+        stat_comparison['0D'][varname] = anova2onerm_0d_and_posthocs(df,
+                                                                     dv=varname,
+                                                                     within='speed',
+                                                                     between='clustlabel',
+                                                                     subject='ptcode')
+
+        # Plot results
+        for speedi, speed in enumerate(speeds):
+
+            # Violin plot
+            sns.violinplot(ax=discvaraxs[speedi],
+                           x='clustlabel',
+                           y=varname,
+                           data=df.loc[df['speed'] == speed],
+                           palette=groupcolours,
+                           legend=False)
+
+            # Xticks
+            discvaraxs[speedi].set_xticks(np.arange(len(grouplabels)), grouplabels)
+
+            # Add stats in xlabel
+            if stat_comparison['0D'][varname]['ANOVA2onerm']['p-unc'].loc[
+                stat_comparison['0D'][varname]['ANOVA2onerm']['Source'] == 'clustlabel'].values < 0.05:
+                statsstr = write_0Dposthoc_statstr(stat_comparison['0D'][varname]['posthocs'],
+                                                   'speed * clustlabel', 'speed', speed)
+                discvaraxs[speedi].set_xlabel(f'C: {statsstr}', fontsize=11)
+
+            else:
+                discvaraxs[speedi].set_xlabel(' ', fontsize=11)
+
+            # y label
+            if speedi == 0:
+                discvaraxs[speedi].set_ylabel(kinematics_ylabels[varname])
+            else:
+                discvaraxs[speedi].set_ylabel('')
+
+            # Add title
+            discvaraxs[speedi].set_title(f'{speed} km/h')
+
+        # Same y limits
+        ylims = [ax.get_ylim() for ax in discvaraxs]
+        for ax in discvaraxs:
+            ax.set_ylim([min([ylim[0] for ylim in ylims]), max([ylim[1] for ylim in ylims])])
+
+        # Set suptitle as the var name and stats
+        statsstr = write_0DmixedANOVA_statstr(stat_comparison['0D'][varname]['ANOVA2onerm'],
+                                              between='clustlabel',
+                                              within='speed',
+                                              betweenlabel='C',
+                                              withinlabel='S')
+
+        discvarfig.suptitle(f'{kinematics_titles[varname]}\n{statsstr}')
+
+        # Save and close
+        plt.tight_layout()
+        discvarfig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_{varname}_ANOVA2onerm.png'), dpi=300,
+                           bbox_inches='tight')
+        plt.close(discvarfig)
+
+    # 1D variables: SPM 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
+    speedfig, speedaxs = plt.subplots(2, 3, figsize=(11, 4.5))
+    speedaxs = speedaxs.flatten()
+
+    # Get avge toe off for each speed and for each group based on duty factor for the plots
+    avgeto = {}
+    speedavgeto = []
+    for stage in stages:
+        avgeto[stage] = []
+        for group in grouplabels:
+            groupidcs = np.where(datadict[stage]['ptlabels']['clustlabel'] == group)[0]
+            avgeto[stage].append(np.round(np.mean(datadict[stage]['DUTYFACTOR'][groupidcs, :]) * 100, 1))
+
+        speedavgeto.append(np.round(np.mean(datadict[stage]['DUTYFACTOR']) * 100, 1))
+
+    for vari, contvar in enumerate(contvars):
+
+        stat_comparison['1D'][contvar] = {}
+
+        # Initialise data holders
+        group = []
+        speed = []
+        subject = []
+        Y = []
+        Ydiff = []
+
+        # Prepare data for SPM and SPM mean and std plots
+        fig = plt.figure()
+        fig.set_size_inches(10, 5)
+        basegrid = fig.add_gridspec(2, 1)
+        topgrid = basegrid[0].subgridspec(1, len(stages))
+        bottomgrid = basegrid[1].subgridspec(1, len(stages) - 1)
+
+        upperaxs = []
+        loweraxs = []
+
+        for stgi, stage in enumerate(stages):
+
+            # Append group speed and subject
+            group.append(datadict['multispeed']['ptlabels']['clustlabel'].values)
+            speed.append(np.ones(datadict['multispeed'][varname].shape[0]) * stgi)
+            subject.append(np.arange(len(datadict['multispeed']['ptlabels']['clustlabel'].values)))
+            Y.append(datadict[stage][contvar])
+
+            # Create axis
+            upperaxs.append(fig.add_subplot(topgrid[0, stgi]))
+
+            # Plot mean and std curves
+            for labi, lab in enumerate(np.sort(np.unique(group[-1]))):
+                # Top row: group by group for each speed
+                spm1d.plot.plot_mean_sd(Y[-1][np.where(group[-1] == lab)[0], :],
+                                        x=np.linspace(0, 100, Y[-1].shape[1]),
+                                        linecolor=groupcolours[labi], facecolor=groupcolours[labi],
+                                        ax=upperaxs[stgi])
+
+            # Add vertical line at avge toe off (outside the previous loop so we can get the final ylimits)
+            for labi, lab in enumerate(np.sort(np.unique(group[-1]))):
+                upperaxs[stgi].axvline(x=avgeto[stage][labi], color=groupcolours[labi], linestyle=':')
+
+            # xlabel. This ensures they are all the same size and will get filled with stats if post-hocs were performed
+            upperaxs[stgi].set_xlabel(' ')
+
+            # Speed figure
+            spm1d.plot.plot_mean_sd(Y[-1], x=np.linspace(0, 100, Y[-1].shape[1]),
+                                    linecolor=speedcolours[stgi], facecolor=speedcolours[stgi],
+                                    ax=speedaxs[vari])
+
+            if stgi > 0:
+
+                # Calculate change from one speed to another
+                Ydiff.append(Y[-1] - Y[-2])
+
+                # Plot it by group
+                loweraxs.append(fig.add_subplot(bottomgrid[0, stgi - 1]))
+
+                # Add horizontal line at 0
+                loweraxs[-1].axhline(0, color='black', linestyle='-', linewidth=0.5, zorder=1)
+
+                for uni in np.sort(np.unique(group)):
+                    spm1d.plot.plot_mean_sd(Ydiff[-1].T[:, group[stgi] == uni].T,
+                                            x=np.linspace(0, 100, Ydiff[-1].shape[1]),
+                                            linecolor=groupcolours[uni], facecolor=groupcolours[uni],
+                                            ax=loweraxs[-1])
+
+                # Add vline at avge toe off between speeds (outside the previous loop so we can get the final ylimits)
+                for labi, lab in enumerate(np.sort(np.unique(group[-1]))):
+                    loweraxs[-1].axvline(x=np.mean([avgeto[stages[stgi - 1]][labi], avgeto[stage][labi]]),
+                                         color=groupcolours[labi], linestyle=':')
+
+                # Set title
+                loweraxs[-1].set_title(f'{speeds[stgi]} wrt {speeds[stgi - 1]} km/h')
+
+                # xlabel. This ensures they are all the same size and
+                #  will get filled with stats if post-hocs were performed
+                loweraxs[-1].set_xlabel(' ')
+
+                # Legend
+                loweraxs[-1].legend(['_nolegend_', 'C0', 'C1'],
+                                    loc='lower center',
+                                    bbox_to_anchor=(0.5, 0),
+                                    ncol=2,
+                                    bbox_transform=fig.transFigure,
+                                    frameon=False)
+                plt.subplots_adjust(bottom=0.11)
+
+            # Title
+            upperaxs[stgi].set_title(stg_titles[stgi])
+
+        # ylabels
+        upperaxs[0].set_ylabel(kinematics_ylabels[contvar])
+        loweraxs[0].set_ylabel('${\Delta}$')
+
+        # Get ylims for all upperaxs
+        ylims = [ax.get_ylim() for ax in upperaxs]
+
+        # Set ylims for all upperaxs
+        for ax in upperaxs:
+            ax.set_ylim([min([x[0] for x in ylims]), max([x[1] for x in ylims])])
+
+        # Get ylims for all loweraxs
+        ylims = [ax.get_ylim() for ax in loweraxs]
+
+        # Set ylims for all loweraxs
+        for ax in loweraxs:
+            ax.set_ylim([min([x[0] for x in ylims]), max([x[1] for x in ylims])])
+
+        # add vertical lines at avge toe off to speed figure
+        for spavgetoi, spavgeto in enumerate(speedavgeto):
+            speedaxs[vari].axvline(x=spavgeto, color=speedcolours[spavgetoi], linestyle=':')
+
+        # title and ylabel for speed figure
+        speedaxs[vari].set_title(kinematics_titles[contvar])
+        speedaxs[vari].set_ylabel(kinematics_ylabels[contvar])
+
+        # Conduct SPM analysis
+        spmlist = spm1d.stats.nonparam.anova2onerm(np.concatenate(Y, axis=0),
+                                                   np.concatenate(group),
+                                                   np.concatenate(speed),
+                                                   np.concatenate(subject))
+        stat_comparison['1D'][contvar]['ANOVA2onerm'] = spmlist.inference(alpha=0.05, iterations=1000)
+
+        # Post hoc tests and figures
+        stat_comparison['1D'][contvar]['posthocs'] = {}
+
+        # Add patches to speed figure if there is an effect of speed
+        if stat_comparison['1D'][contvar]['ANOVA2onerm'][1].h0reject:
+            # Scaler for sigcluster endpoints
+            tscaler = speedaxs[vari].get_xlim()[1] / (Y[0].shape[1] - 1)
+
+            # Add patches to speed figure
+            add_sig_spm_cluster_patch(speedaxs[vari], stat_comparison['1D'][contvar]['ANOVA2onerm'][1],
+                                      tscaler=tscaler)
+
+        # Add title to speed figure
+        statstr = f'F* = {write_spm_stats_str(stat_comparison["1D"][contvar]["ANOVA2onerm"][1], mode="stat")}'
+
+        speedaxs[vari].set_title(f'{kinematics_titles[contvar]}\n{statstr}')
+
+        # Follow up with post-hoc tests if cluster effects are found
+        if stat_comparison['1D'][contvar]['ANOVA2onerm'][0].h0reject:
+
+            stat_comparison['1D'][contvar]['posthocs']['cluster'] = {}
+
+            # For each speed
+            for spi, (groupi, Yi) in enumerate(zip(group, Y)):
+
+                stat_comparison['1D'][contvar]['posthocs']['cluster'][stages[spi]] = {}
+
+                # SnPM ttest
+                snpm = spm1d.stats.nonparam.ttest2(Yi[groupi == 0, :], Yi[groupi == 1, :], )
+                snpmi = snpm.inference(alpha=0.05 / len(Y), two_tailed=True, iterations=1000)
+
+                # Add snpmi to dictionary
+                stat_comparison['1D'][contvar]['posthocs']['cluster'][stages[spi]]['snpm_ttest2'] = snpmi
+
+                # Add stats to xlabel
+                statstr = f't* = {write_spm_stats_str(snpmi, mode="full")}'
+                upperaxs[spi].set_xlabel(statstr, fontsize=10)
+
+                # Plot
+                plt.figure()
+                snpmi.plot()
+                snpmi.plot_threshold_label(fontsize=8)
+                snpmi.plot_p_values(size=10)
+                plt.gcf().suptitle(f'{contvar}_posthoc_{stages[spi]}')
+
+                # Save figure and close it
+                plt.savefig(os.path.join(reportdir, f'{savingkw}_{contvar}_posthoc_{stages[spi]}.png'))
+                plt.close(plt.gcf())
+
+                # Add patches to upperaxs if significant diffs are found
+                if snpmi.h0reject:
+                    # Scaler for sigcluster endpoints
+                    tscaler = upperaxs[spi].get_xlim()[1] / (Y[0].shape[1] - 1)
+
+                    # Add significant pathces to upperaxs
+                    add_sig_spm_cluster_patch(upperaxs[spi], snpmi, tscaler=tscaler)
+
+        # Interaction effect
+        if stat_comparison['1D'][contvar]['ANOVA2onerm'][2].h0reject:
+
+            stat_comparison['1D'][contvar]['posthocs']['interaction'] = {}
+
+            # Calculate change in conditions
+            for condi in range(len(stages) - 1):
+
+                # SnPM ttest
+                snpm = spm1d.stats.nonparam.ttest2(Ydiff[condi][group[condi] == 0, :],
+                                                   Ydiff[condi][group[condi] == 1, :], )
+                snpmi = snpm.inference(alpha=0.05 / len(range(len(stages) - 1)), two_tailed=True, iterations=1000)
+
+                # Add snpmi to dictionary
+                stat_comparison['1D'][contvar]['posthocs']['interaction'][
+                    f'{speeds[condi + 1]}_wrt_{speeds[condi]}'] = {}
+                stat_comparison['1D'][contvar]['posthocs']['interaction'][
+                    f'{speeds[condi + 1]}_wrt_{speeds[condi]}']['snpm_ttest2'] = snpmi
+
+                # Add stats to xlabel
+                statstr = f't* = {write_spm_stats_str(snpmi, mode="full")}'
+                loweraxs[condi].set_xlabel(statstr, fontsize=10)
+
+                # Plot
+                plt.figure()
+                snpmi.plot()
+                snpmi.plot_threshold_label(fontsize=8)
+                snpmi.plot_p_values(size=10)
+                plt.gcf().suptitle(f'{contvar}_posthoc_{speeds[condi + 1]}_v_{speeds[condi]}')
+
+                # Save figure and close it
+                plt.savefig(os.path.join(reportdir,
+                                         f'{savingkw}_multispeed_{contvar}_interact_posthoc_{speeds[condi + 1]}_v_{speeds[condi]}.png'))
+                plt.close(plt.gcf())
+
+                # Add patches to loweraxs if significant diffs are found
+                if snpmi.h0reject:
+                    # Scaler for sigcluster endpoints
+                    tscaler = loweraxs[condi].get_xlim()[1] / (Ydiff[0].shape[1] - 1)
+
+                    # Add significant pathces to loweraxs
+                    add_sig_spm_cluster_patch(loweraxs[condi], snpmi, tscaler=tscaler)
+
+        # Write cluster effect string for suptitle
+        statstr = f'C: F* = {write_spm_stats_str(stat_comparison["1D"][contvar]["ANOVA2onerm"][0], mode="full")}'
+
+        # Write interaction effect string for suptitle
+        statstr += f'; CxS: F* = {write_spm_stats_str(stat_comparison["1D"][contvar]["ANOVA2onerm"][2], mode="full")}'
+
+        # Set suptitle
+        fig.suptitle(f'{kinematics_titles[contvar]}\n{statstr}')
+
+        # Save and close
+        plt.subplots_adjust(bottom=0.13)
+        plt.tight_layout()
+        fig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_{contvar}_ANOVA2onerm.png'), dpi=300,
+                    bbox_inches='tight')
+        plt.close(fig)
+
+    # Add legend to last plot in speed figure
+    speedaxs[-1].legend(speeds, frameon=False)
+
+    # Save speed figure
+    plt.tight_layout()
+    speedfig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_kinematics_by_speed.png'), dpi=300,
+                     bbox_inches='tight')
+    plt.close(speedfig)
+
+    return stat_comparison
+
+
+def anova2onerm_0d_and_posthocs(datadf, dv='', within='', between='', subject=''):
+
+    """
+    Perform a two-way ANOVA with one repeated measures factor and one between-subjects factor,
+    followed by Bonferroni post-hoc tests.
+
+    Parameters:
+    datadf (pd.DataFrame): The data frame containing the data.
+    dv (str): The dependent variable.
+    within (str): The within-subjects factor.
+    between (str): The between-subjects factor.
+    subject (str): The subject identifier.
+
+    Returns:
+    statsdict (dict): A dictionary containing the ANOVA results and post-hoc test results.
+    """
+
+    statsdict = {}
+
+    # Run ANOVA with one RM factor and one between factor
+    statsdict['ANOVA2onerm'] = pg.mixed_anova(dv=dv,
+                                              within=within,
+                                              subject=subject,
+                                              between=between,
+                                              data=datadf,
+                                              effsize='np2',
+                                              correction=True)
+
+    # Run Bonferroni post-hoc tests
+    statsdict['posthocs'] = pg.pairwise_ttests(dv=dv,
+                                               within=within,
+                                               subject=subject,
+                                               between=between,
+                                               data=datadf,
+                                               padjust='bonf',
+                                               effsize='cohen')
+
+    return statsdict
+
+
+def write_spm_stats_str(spmobj, mode='full'):
+
+    """
+    Generate a string representation of SPM (Statistical Parametric Mapping) statistics.
+
+    Parameters:
+    spmobj (object): The SPM object containing the statistical results.
+    mode (str, optional): The mode of the output string. Must be one of 'full', 'stat', or 'p'. Defaults to 'full'.
+
+    Returns:
+    str: A string representation of the SPM statistics.
+
+    Raises:
+    ValueError: If the mode is not one of 'full', 'stat', or 'p'.
+    """
+
+    # Make sure mode is full, stat or p
+    if mode not in ['full', 'stat', 'p']:
+        raise ValueError('mode must be either full, stat or p')
+
+    # Initialise statsstr
+    statsstr = ''
+
+    # Add stat value
+    if mode == 'full' or mode == 'stat':
+        statsstr = f'{np.round(spmobj.zstar, 2)}'
+
+    # Add p value
+    if mode == 'full' or mode == 'p':
+        if len(spmobj.p) == 1:
+            if spmobj.p[0] < 0.001:
+                statsstr += f', p < 0.001'
+            else:
+                statsstr += f', p = {np.round(spmobj.p[0], 3)}'
+        elif len(spmobj.p) > 1:
+            statsstr += ', p = ['
+            for i, p in enumerate(spmobj.p):
+                if i > 0:
+                    statsstr += ', '
+                if p < 0.001:
+                    statsstr += f'< 0.001'
+                else:
+                    statsstr += f'{np.round(p, 3)}'
+            statsstr += ']'
+
+    return statsstr
+
+
+def add_sig_spm_cluster_patch(ax, spmobj, tscaler=1):
+
+    """
+    Add patches to a plot to indicate significant clusters from SPM (Statistical Parametric Mapping) analysis.
+
+    Parameters:
+    ax (matplotlib.axes.Axes): The axes object to which the patches will be added.
+    spmobj (object): The SPM object containing the significant clusters.
+    tscaler (float, optional): A scaling factor for the time axis. Defaults to 1.
+    """
+
+    for sigcluster in spmobj.clusters:
+        ylim = ax.get_ylim()
+        ax.add_patch(plt.Rectangle((sigcluster.endpoints[0] * tscaler, ylim[0]),
+                                   (sigcluster.endpoints[1] - sigcluster.endpoints[0]) * tscaler,
+                                   ylim[1] - ylim[0], color='grey', alpha=0.5, linestyle=''))
+
+
+def write_0Dposthoc_statstr(posthoctable, contrastvalue, withinfactor, withinfactorvalue):
+
+    """
+    Generate a string representation of post-hoc test statistics for a given contrast and within-factor value.
+
+    Parameters:
+    posthoctable (pd.DataFrame): The DataFrame containing the post-hoc test results.
+    contrastvalue (str): The contrast value to filter the post-hoc table.
+    withinfactor (str): The within-subjects factor to filter the post-hoc table.
+    withinfactorvalue (str): The value of the within-subjects factor to filter the post-hoc table.
+
+    Returns:
+    str: A string representation of the post-hoc test statistics, including t-value, p-value, and Cohen's d.
+    """
+
+    t = np.round(posthoctable['T'].loc[
+                     (posthoctable['Contrast'] == contrastvalue) & (
+                                 posthoctable[withinfactor] == withinfactorvalue)].values[
+                     0], 2)
+    d = np.round(posthoctable['cohen'].loc[
+                     (posthoctable['Contrast'] == contrastvalue) & (
+                                 posthoctable[withinfactor] == withinfactorvalue)].values[
+                     0], 2)
+    if posthoctable['p-corr'].loc[
+        (posthoctable['Contrast'] == contrastvalue) & (posthoctable[withinfactor] == withinfactorvalue)].values[
+        0] < 0.001:
+        p = '< 0.001'
+    else:
+        p = np.round(posthoctable['p-corr'].loc[
+                         (posthoctable['Contrast'] == contrastvalue) & (
+                                     posthoctable[withinfactor] == withinfactorvalue)].values[
+                         0], 3)
+
+    return f't = {t}, p = {p}, d = {d}'
+
+
+def write_0DmixedANOVA_statstr(mixed_anovatable, between='', within='', betweenlabel='', withinlabel=''):
+
+    """
+    Write a formatted string summarizing the results of a mixed ANOVA with one between-subjects factor and
+     one within-subjects factor.
+
+    Parameters:
+    mixed_anovatable (pd.DataFrame): DataFrame containing the ANOVA results. Output of penguoin mixed_anova.
+    between (str): Name of the between-subjects factor.
+    within (str): Name of the within-subjects factor.
+    betweenlabel (str, optional): Label for the between-subjects factor. Defaults to the value of 'between'.
+    withinlabel (str, optional): Label for the within-subjects factor. Defaults to the value of 'within'.
+
+    Returns:
+    statstr (str): A formatted string summarizing the ANOVA results.
+    """
+
+
+    # Get factor labels or set them to factor names if not provided
+    if betweenlabel == '':
+        betweenlabel = between
+    if withinlabel == '':
+        withinlabel = within
+
+    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == between].values < 0.001:
+        statstr = f'{betweenlabel}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, p < 0.001'
+    else:
+        statstr = (f'{betweenlabel}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, '
+                   f'p = {np.round(mixed_anovatable["p-unc"].values[0], 3)}')
+
+    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'speed'].values < 0.001:
+        statstr += f'; {withinlabel}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, p < 0.001'
+    else:
+        statstr += (f'; {withinlabel}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, '
+                    f'p = {np.round(mixed_anovatable["p-unc"].values[1], 3)}')
+
+    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'Interaction'].values < 0.001:
+        statstr += (f'; {betweenlabel}x{withinlabel}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, '
+                    f'p < 0.001')
+    else:
+        statstr += (f'; {betweenlabel}x{withinlabel}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, '
+                    f'p = {np.round(mixed_anovatable["p-unc"].values[2], 2)}')
+
+    return statstr
