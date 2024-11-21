@@ -18,7 +18,7 @@ These instructions will get a copy of the project up and running on your local m
 
 ```Shell
    git clone https://github.com/adrianrivadulla/clustering_runners.git
-   ```
+```
 
 or download and unzip this repository.
 
@@ -26,10 +26,10 @@ or download and unzip this repository.
 
 Navigate to the clustering_runners directory and create a version environment with the environment.yml file provided:
 
-     ```Shell
+ ```Shell
      cd /path/to/clustering_runners
      conda env create -f environment.yml
-     ```
+ ```
 
 ### Usage
 
@@ -37,7 +37,7 @@ Navigate to the clustering_runners directory and create a version environment wi
 - Activate the environment:
 
 ```Shell
-    conda activate clustering_runners
+    conda activate clustering_runners_env
 ```
 
 - Just run the main.py script:
@@ -49,9 +49,7 @@ Navigate to the clustering_runners directory and create a version environment wi
 Note that the script is interactive since this is how I designed it for myself when I was working on the project.
 You will have to select the number of clusters you want for analysis based on the dendrogram and internal validity scores.
 Similarly, since clustering was performed at three different speeds and the multispeed condition independently, you will have to
-match up the colours via a GUI for the visualisations to make more sense.
-
-Note that to replicate the exact results and figures of the analysis, you will need to select 2 as the number of clusters
+match up the colours via a GUI for the visualisations to make more sense. To replicate the exact results and figures of the analysis, you will need to select 2 as the number of clusters
 in every condition, since this was our choice based on the dendrogram and internal validity scores (prioritising Silhouette scores).
 
 Similarly, the functions for statistical tests have been developed for the specific case of having 2 clusters and will need to be 
