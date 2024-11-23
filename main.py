@@ -54,6 +54,12 @@ datadir = os.path.join(projectdir, 'data')
 # Report dir for saving figures
 reportdir = os.path.join(projectdir, 'report')
 
+# Create it if it doesn't exist
+if not os.path.exists(reportdir):
+    os.makedirs(reportdir)
+else:
+    print(f'Report directory found. Existing files will be overwritten.')
+    
 # Master datasheet
 masterdatapath = os.path.join(datadir, 'MasterDataSheet.xlsx')
 
