@@ -59,7 +59,7 @@ if not os.path.exists(reportdir):
     os.makedirs(reportdir)
 else:
     print(f'Report directory found. Existing files will be overwritten.')
-    
+
 # Master datasheet
 masterdatapath = os.path.join(datadir, 'MasterDataSheet.xlsx')
 
