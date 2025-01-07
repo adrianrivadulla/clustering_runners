@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Dec 29 10:58:19 2022
+Replicate the static pelvic titlt analysis in Rivadulla et al. (2024)
 
-@author: arr43
+Author: Adrian R Rivadulla
+
 """
 
 

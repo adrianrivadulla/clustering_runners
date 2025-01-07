@@ -24,9 +24,11 @@ running economy are compared between the clusters for the multispeed condition.
 The results are saved in the report directory. Users shouldn't need to modify the script but can do so in the Defalts
 section if minor changes to variables of interest, thresholds, etc. are needed.
 
+Author: Adrian R Rivadulla
+
+
 """
 
-# Authors: Adrian R Rivadulla
 
 # %% Imports
 import os
