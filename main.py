@@ -27,6 +27,10 @@ section if minor changes to variables of interest, thresholds, etc. are needed.
 Author: Adrian R Rivadulla
 
 
+TODO.
+Change everything to demoanthrophys
+use new function for demoanthrophys analysis
+
 """
 
 

@@ -13,6 +13,7 @@ import os
 import warnings
 import natsort
 from itertools import combinations
+import datetime
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -2369,3 +2370,204 @@ def write_0DmixedANOVA_statstr(mixed_anovatable, between='', within='', betweenl
                     f'p = {np.round(mixed_anovatable["p-unc"].values[2], 2)}')
 
     return statstr
+
+
+def demoanthrophys_analysis(datasheet, groupvarname, respeeds, figargs):
+    """
+    Compare demographics, anthropometrics and physiological variables between clusters.
+
+    :return:
+    """
+
+    # Get figargs
+    reportdir = figargs['reportdir']
+    savingkw = figargs['savingkw']
+    demoanthrophysvars_titles = figargs['demoanthrophysvars_titles']
+    demoanthrophysvars_ylabels = figargs['demoanthrophysvars_ylabels']
+    grlabels = figargs['grouplabels']
+    grcolours = figargs['groupcolours']
+    custom_groupnames = figargs['custom_groupnames']
+
+    # Keys without RE
+    noRE_keys = [key for key in demoanthrophysvars_ylabels.keys() if 'RE' not in key]
+
+    # Demographics, anthropometrics and physiological variables ignoring EE
+    demoanthrophys = comparison_0D_contvar_indgroups(
+        {key: datasheet[key] for key in noRE_keys if 'Sex' not in key},
+        datasheet[groupvarname].values,
+        savingkw,
+        reportdir,
+        grcolours)
+
+    # Make figures
+    if len(noRE_keys) == 16:
+        demoanthrophysfig, demoanthrophysaxs = plt.subplots(4, 4, figsize=(11, 8))
+
+    elif len(noRE_keys) == 15:
+        demoanthrophysfig, demoanthrophysaxs = plt.subplots(3, 5, figsize=(11, 6))
+
+    else:
+        print('Number of variables without RE is not 15 or 16.'
+              'Figure may look a mess.'
+              'Please modify the code accordingly.')
+        nrows = int(np.ceil(len(noRE_keys) / 4))
+        demoanthrophysfig, demoanthrophysaxs = plt.subplots(nrows, 4, figsize=(11, 3 * nrows))
+
+    # Flatten axes
+    demoanthrophysaxs = demoanthrophysaxs.flatten()
+
+    # Go through each variable
+    for vari, varname in enumerate([key for key in demoanthrophysvars_ylabels.keys() if key != 'RE']):
+
+        if varname == 'Sex':
+
+            fempctge = []
+            sextable = []
+
+            for gri, group in enumerate(grlabels):
+
+                # Get pts in that cluster
+                groupmaster = datasheet.loc[datasheet[groupvarname] == group]
+                fempctge.append(len(groupmaster.loc[groupmaster['Sex'] == 'Female']) / len(groupmaster) * 100)
+
+                # Get number of women and men in that cluster
+                sextable.append([len(groupmaster.loc[groupmaster['Sex'] == 'Female']),
+                                 len(groupmaster.loc[groupmaster['Sex'] == 'Male'])])
+
+            # Add chi square test
+            demoanthrophys[varname] = {}
+            demoanthrophys[varname]['chi_test'] = {}
+            demoanthrophys[varname]['chi_test']['chi_sq'], \
+                demoanthrophys[varname]['chi_test']['p'], _, _ = stats.chi2_contingency(sextable)
+
+            # Bar plot
+            sns.barplot(ax=demoanthrophysaxs[vari],
+                        x=grlabels,
+                        y=fempctge,
+                        hue=grlabels,
+                        palette=grcolours,
+                        legend=False)
+
+            # Set xticks
+            if custom_groupnames:
+                demoanthrophysaxs[vari].set_xticks(demoanthrophysaxs[vari].get_xticks(), grlabels)
+
+        elif varname == 'RunningDaysAWeek':
+
+            # Count plot
+            sns.countplot(ax=demoanthrophysaxs[vari],
+                          x=datasheet[varname],
+                          hue=datasheet[groupvarname],
+                          palette=grcolours)
+
+            # Remove legend
+            demoanthrophysaxs[vari].get_legend().remove()
+
+            # Remove xlabel
+            demoanthrophysaxs[vari].set_xlabel('')
+
+        else:
+
+            # Violin plot
+            sns.violinplot(ax=demoanthrophysaxs[vari],
+                           x=datasheet[groupvarname],
+                           y=datasheet[varname],
+                           hue=datasheet[groupvarname],
+                           palette=grcolours,
+                           legend=False)
+
+            # Xticks
+            if custom_groupnames:
+                demoanthrophysaxs[vari].set_xticks(demoanthrophysaxs[vari].get_xticks(), custom_groupnames)
+            else:
+                demoanthrophysaxs[vari].set_xticks(demoanthrophysaxs[vari].get_xticks(),
+                                                   [f'C{int(x)}' for x in demoanthrophysaxs[vari].get_xticks()])
+
+        # Yticks for Time10Ks
+        if varname == 'Time10Ks' or varname == 'Sess2_times':
+            # Convert to datetime and keep just mm:ss
+            yticks = [str(datetime.timedelta(seconds=x)) for x in demoanthrophysaxs[vari].get_yticks()]
+            yticks = [x[x.find(':') + 1:] for x in yticks]
+
+            # Set new ticks
+            demoanthrophysaxs[vari].set_yticklabels(yticks)
+
+        # Ylabels
+        demoanthrophysaxs[vari].set_ylabel(demoanthrophysvars_ylabels[varname])
+
+        # Xlabel off
+        demoanthrophysaxs[vari].set_xlabel('')
+
+        # Title
+        if varname in demoanthrophysvars_titles.keys():
+            title = demoanthrophysvars_titles[varname]
+        elif varname == 'Sex':
+            title = 'Sex'
+
+        if varname in demoanthrophys.keys():
+
+            # Get key which is not normality
+            stat_test = [key for key in demoanthrophys[varname].keys() if key != 'normality'][0]
+
+            # Add asterisk to indicate significant differences
+            if demoanthrophys[varname][stat_test]['p'] < 0.05:
+                demoanthrophysaxs[vari].set_title(f'{title} *')
+            else:
+                demoanthrophysaxs[vari].set_title(title)
+
+        else:
+            demoanthrophysaxs[vari].set_title(title)
+
+    plt.tight_layout()
+
+    # Save and close
+    demoanthrophysfig.savefig(os.path.join(reportdir, f'{savingkw}_demoantrhophys.png'), dpi=300, bbox_inches='tight')
+    plt.close(demoanthrophysfig)
+
+    # RE variables
+
+    # Get EE data into a dataframe FIX PT AND SPEEDS
+    redf = pd.DataFrame()
+    redf['EE'] = np.concatenate([datasheet[f'EE{speed}kg'].values for speed in respeeds])
+    redf['speed'] = np.concatenate([[int(speed)] * len(datasheet.index) for speed in respeeds])
+    redf['clustlabel'] = np.tile(datasheet[groupvarname].values, len(respeeds))
+    redf['ptcode'] = np.tile(datasheet.index, len(respeeds))
+
+    # Run 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
+    demoanthrophys['EE'] = anova2onerm_0d_and_posthocs(redf,
+                                                       dv='EE',
+                                                       within='speed',
+                                                       between='clustlabel',
+                                                       subject='ptcode')
+
+    refig, reaxs = plt.subplots(1, 1, figsize=(6, 2))
+    sns.violinplot(ax=reaxs, x='speed', y='EE', hue='clustlabel', data=redf, palette=grcolours)
+
+    # Append km/h to each xtick
+    reaxs.set_xticklabels([f'{speed} km/h' for speed in respeeds])
+    reaxs.set_xlabel('')
+    reaxs.set_ylabel(demoanthrophysvars_ylabels['RE'])
+    reaxs.set_title('Running Economy')
+
+    # Legend
+    reaxs.legend(loc='lower center',
+                 bbox_to_anchor=(0.5, 0),
+                 ncol=2,
+                 bbox_transform=refig.transFigure,
+                 frameon=False)
+    plt.subplots_adjust(bottom=0.25)
+
+    # Get legend
+    legend = reaxs.get_legend()
+
+    # Change legend labels
+    if custom_groupnames:
+        for gri, (group, groupname) in enumerate(zip(grlabels, custom_groupnames)):
+            legend.get_texts()[gri].set_text(groupname)
+
+    # Save and close
+    plt.tight_layout()
+    refig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_RE.png'), dpi=300, bbox_inches='tight')
+    plt.close(refig)
+
+    return demoanthrophys
