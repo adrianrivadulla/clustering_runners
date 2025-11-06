@@ -58,6 +58,8 @@ in every condition, since this was our choice based on the dendrogram and intern
 The functions for statistical tests have been developed for the specific case of having 2 clusters and will need to be 
 expanded if you want to compare more than 2 clusters.
 
+Creating the SPM figures takes a few minutes. Please be patient. This may be solved with newer versions of the spm1d package itself or matplotlib.
+
 Documentation for the different scripts and functions has been generated using Copilot and it can be brief in some cases. 
 
 The code has not gone through linting or code style checks so it could definitely be improved in that regard.
