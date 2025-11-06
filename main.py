@@ -180,24 +180,6 @@ speedcolours = ['C0', 'C6', 'C3']
 # recquality colours
 recqualcolours = [['C0'], ['C6'], ['C3'], ['C0', 'C6', 'C3']]
 
-
-
-# # Opensim stoheader
-# stoheaderpath = r'X:\Health\ResearchProjects\EPreatoni\EG-FH1095\Admin\sto_header.sto'
-#
-# # Default column names for opensim model 3DGaitModel12392
-# osimvarnames = ['time', 'pelvis_tilt', 'pelvis_list', 'pelvis_rotation', 'pelvis_tx', 'pelvis_ty', 'pelvis_tz',
-#             'hip_flexion_r', 'hip_adduction_r', 'hip_rotation_r', 'knee_angle_r', 'ankle_angle_r', 'subtalar_angle_r',
-#             'mtp_angle_r', 'hip_flexion_l', 'hip_adduction_l', 'hip_rotation_l', 'knee_angle_l', 'ankle_angle_l',
-#             'subtalar_angle_l', 'mtp_angle_l', 'lumbar_extension', 'lumbar_bending', 'lumbar_rotation']
-#
-# # Corresponding varnames
-# corrvarnames = ['tsec', 'RPELV_ANG_0', '_', '_', '_', 'RCOM_2', '_',
-#                 'RHIP_0','_', '_', 'RKNEE_0', 'RANK_0', '_',
-#                 '_', '_', '_', '_', '_', '_',
-#                 '_', '_', 'RTRUNK2PELVIS_0', '_', '_']
-
-
 # %% Data loading and wrangling
 master, clustdata, vartracker, pts = load_mastersheet_and_kinematics(masterdatapath,
                                                                      kindatapath,

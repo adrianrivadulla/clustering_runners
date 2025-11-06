@@ -60,7 +60,9 @@ expanded if you want to compare more than 2 clusters.
 
 Documentation for the different scripts and functions has been generated using Copilot and it can be brief in some cases. 
 
-The code could has not gone through linting or code style checks so it could definitely be improved in that regard.
+The code has not gone through linting or code style checks so it could definitely be improved in that regard.
+
+Newer package managers like uv could be used for faster environment set up.
 
 ## License
 
@@ -80,4 +82,4 @@ Rivadulla, A. R., Chen, X., Cazzola, D., Trewartha, G., & Preatoni, E. (2024). C
 
 
 # Contact
-For questions about our paper or code, please contact [Adrian R](mailto:arr43@bath.ac.uk).
+For questions about our paper or code, please contact [Adrian R](mailto:arr43@bath.ac.uk). Since I currently do not have the time to make this repo adhere to the best practices in terms of code quality, style and documentation, improvements and suggestions are welcome.
