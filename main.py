@@ -28,8 +28,6 @@ Author: Adrian R Rivadulla
 
 
 TODO.
-Change everything to demoanthrophys
-use new function for demoanthrophys analysis
 
 """
 
@@ -71,16 +69,6 @@ masterdatapath = os.path.join(datadir, 'MasterDataSheet.xlsx')
 
 # kinematics data
 kindatapath = os.path.join(datadir, 'AllCurves_ptavgs.npy')
-
-# # Opensim model path
-# modelpath = r'C:\Users\arr43\Documents\OpenSim\4.3\Models\Gait2392_Simbody\gait2392_simbody_custom.osim'
-#
-# # Sto file header template
-# stoheaderpath = r'X:\Health\ResearchProjects\EPreatoni\EG-FH1095\Admin\sto_header.sto'
-#
-# # Opensim paths
-# modelpath = r'C:\Users\arr43\Documents\OpenSim\4.3\Models\Gait2392_Simbody\gait2392_simbody_custom.osim'
-# genscalsetuppath = r'C:\Users\arr43\Documents\OpenSim\4.3\Models\Gait2392_Simbody\Generic_Scale_setup.xml'
 
 # Matplotlib style
 matplotlib.use('Qt5Agg')

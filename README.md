@@ -52,10 +52,15 @@ Similarly, since clustering was performed at three different speeds and the mult
 match up the colours via a GUI for the visualisations to make more sense. **To replicate the exact results and figures of the analysis, you will need to select 2 as the number of clusters
 in every condition, since this was our choice based on the dendrogram and internal validity scores (prioritising Silhouette scores).**
 
-Similarly, the functions for statistical tests have been developed for the specific case of having 2 clusters and will need to be 
+
+## Limitations
+
+The functions for statistical tests have been developed for the specific case of having 2 clusters and will need to be 
 expanded if you want to compare more than 2 clusters.
 
 Documentation for the different scripts and functions has been generated using Copilot and it can be brief in some cases. 
+
+The code could has not gone through linting or code style checks so it could definitely be improved in that regard.
 
 ## License
 
