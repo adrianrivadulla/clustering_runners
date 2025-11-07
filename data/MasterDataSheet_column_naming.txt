@@ -1,0 +1,42 @@
+Column name description
+
+Participant: (P***) Unique id
+Sex: (Female/Male)
+Age: (years)
+Height: (m)
+Mass: (kg)
+RunningDaysAWeek: (days)
+KmAWeek: (km)
+Injuries12Months: reported by participants
+Time10K: (hh:mm:ss) reported by participants
+LT: (km/h) lactate threshold speed calculated during maximal incremental protocol
+VO2max: (ml/min/kg) VO2peak normalised to body bass reached during maximal incremental protocol
+RQ: (VCO2/VO2) respiratory quotient achieved during maximal incremental protocol
+HRmax: (bpm) peak heart rate achieved during maximal incremental protocol
+RPEmax: (Borgs scale 6-20) peak rate of perceived exertion achieved during maximal incremental protocol
+MaxCompletedSpeed: (km/h) during maximal incremental protocol
+MaxStartedSpeed: (km/h) during maximal incremental protocol
+Temperature: (°C) lab temperature during maximal incremental protocol
+Humidity: (%) in the lab during maximal incremental protocol
+Pressure: (mmhg) in the lab during maximal incremental protocol
+EE10-20: (kcal/min) energy expenditure using Weir's equation at speeds 10 through to 20 km/h during maximal incremental protocol. Note that this is only reported for submaximal speeds (below LT)
+VO10-20: (ml/min/kg) VO2 normalised to body mass at speeds 10 through to 20 km/h during maximal incremental protocol. Note that this is only reported for submaximal speeds (below LT)
+HR10-20: (bpm) heart rate at speeds 10 through to 20 km/h during maximal incremental protocol. Note that this is only reported for submaximal speeds (below LT)
+PelvWidth: (m) pelvis width measured as the distance between the two hip joint centres during the static calibration trial.
+ThiLgth_r: (m) right thigh length measured as the distance between the hip and knee joint centres during the static calibration trial.
+ThiLgth_l: (m) left thigh length measured as the distance between the hip and knee joint centres during the static calibration trial.
+ShaLgth_r: (m) right thigh length measured as the distance between the knee and ankle joint centres during the static calibration trial.
+ShaLgth_l: (m) left thigh length measured as the distance between the knee and ankle joint centres during the static calibration trial.
+LegLgth_r: (m) right leg length measured as the vertical position of the hip joint centre during the static calibration trial.
+LegLgth_l: (m) left leg length measured as the vertical position of the hip joint centre during the static calibration trial.
+FootLgth_r: (m) right foot length measured as the distance between the marker on the heel (RFCC) and the distal end of the big toe during the static calibration trial.
+FootLgth_l: (m) left foot length measured as the distance between the marker on the heel (LFCC) and the distal end of the big toe during the static calibration trial.
+TrunkLgth: (m) trunk length measured as participant's height - leg length during the static calibration trial.
+Sess2_time: (hh:mm:ss) time run during the run to exhaustion at constant speed (session 2)
+Sess2_RPE: (Borgs scale 6-20) rate of perceived exertion achieved at the end of the run to exhaustion at constant speed (session 2)
+Sess2_La: (mmol/l) lactate in blood at the end of the run to exhaustion at constant speed (session 2)
+Sess2_Temperature: (°C) lab temperature during long run to exhaustion (session 2)
+Sess2_Humidity: (%) in the lab during long run to exhaustion (session 2)
+Sess2_Pressure: (mmHg) in the lab during long run to exhaustion (session 2)
+EEJW10-20: (kcal/min) energy expenditure in using Jeukendrup & Wallis's equation at speeds 10 through to 20 km/h during maximal incremental protocol. Note that this is only reported for submaximal speeds (below LT)
+RPE10-25: (Borgs scale 6-20) rate of perceived exertion at speeds 10 through to 21 km/h during maximal incremental protocol. Note that this is only reported for those speeds which were started.
