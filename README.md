@@ -85,7 +85,7 @@ You should have received a copy of the GNU Lesser General Public License along w
 
 
 # Citation
-If you use FootNet or this code base in your work, please cite:
+If you use this codebase in your work, please cite:
 
 Rivadulla, A. R., Chen, X., Cazzola, D., Trewartha, G., & Preatoni, E. (2024). Clustering analysis across different speeds reveals two distinct running techniques with no differences in running economy. Sports Biomechanics, 1–24. https://doi.org/10.1080/14763141.2024.2372608
 
