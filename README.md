@@ -33,7 +33,7 @@ Navigate to the clustering_runners directory and create a version environment wi
 
 ### Getting the data
 
-Download the dataset from [waiting for Bath research data link]. Create a `data` directory by unzipping the dataset within the project root. Please refer to the dataset description in the link for further details on how the data and files are structured.
+Download the dataset from https://researchdata.bath.ac.uk/1636/. Create a `data` directory by unzipping the dataset within the project root. Please refer to the dataset description in the link for further details on how the data and files are structured.
 
 
 ### Usage
