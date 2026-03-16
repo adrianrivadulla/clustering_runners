@@ -29,6 +29,7 @@ Author: Adrian R Rivadulla
 
 TODO.
 
+- Use demoanthrophys_analysis from research-utils and replace here
 """
 
 
@@ -46,6 +47,7 @@ from sklearn.metrics.cluster import adjusted_mutual_info_score
 from clustering_utils import *
 from data_wrangling_utils import *
 import copy
+from research_utils.pipelines import run_0D_ANOVA2onerm
 
 
 # %% Defaults
@@ -217,7 +219,8 @@ for stgi, stage in enumerate(clustdata.keys()):
     pcaed, dr_scores[stage] = pca_dimensionality_reduction(clustdata[stage], vartracker[stage], stage, figinfo)
 
     # Hierarchical clustering analysis
-    HCA = HierarchClusteringAnalysisTool(pcaed, labels=pts)
+    # HCA = HierarchClusteringAnalysisTool(pcaed, labels=pts)
+    HCA = HierarchClusteringAnalysisTool2(pcaed, labels=pts)
 
     # Rename datalabels column in HCA.colourid as ptcode to make it meaningful for current analysis
     HCA.colourid = HCA.colourid.rename(columns={'datalabels': 'ptcode'})
@@ -579,6 +582,34 @@ figinfo = {'reportdir': reportdir,
            'kinematics_titles': kinematics_titles,
            'kinematics_ylabels': kinematics_ylabels,
            'stg_titles': stg_titles}
+
+#  Potentially go in a function TODO. this is what you'll have to do for the function in research utils to work. just set the data correctly
+datadict = {varname: np.concatenate(clustdata['multispeed'][varname].T) for varname in discvars} # TODO. Potentially extend to contvars
+designfactors = {}
+designfactors['group'] = np.tile(clustdata['multispeed']['ptlabels']['clustlabel'].values, len(stages))
+designfactors['rm'] = np.concatenate(
+    [[int(speeds[stgi])] * clustdata['multispeed'][discvars[0]].shape[0] for stgi, stage in enumerate(stages)])
+designfactors['rm'] = designfactors['rm'].astype(str)
+designfactors['rm'] = [s + ' km/h' for s in designfactors['rm']]
+designfactors['ptids'] = np.tile(clustdata['multispeed']['ptlabels']['ptcode'].values, len(stages))
+
+
+figs, b = run_0D_ANOVA2onerm(
+    datadict,
+    designfactors,
+    kinematics_titles,
+    kinematics_ylabels,
+    uniqclustcolours,
+    ['11', '12', '13'],
+    group_names=['C0', 'C1'],
+    between_factor="clustlabel",
+    within_factor="speed",
+    between_label="C",
+    within_label="S",
+    within_vis=False
+)
+
+# TODO. Add km/h to the titles if you want and figure saving stuff
 
 stat_comparison['multispeed'] = multispeed_kinematics_comparison(clustdata,
                                                                  stages,

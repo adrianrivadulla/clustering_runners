@@ -44,6 +44,8 @@ import spm1d
 import matplotlib.colors as mcolors
 
 
+from research_utils.pipelines import run_0D_ANOVA2onerm # TODO. temp to be removed
+
 # %% Utils
 
 
@@ -513,6 +515,119 @@ class HierarchClusteringAnalysisTool:
         acceptbutton.focus_force()
 
         master.mainloop()
+
+
+class HierarchClusteringAnalysisTool2:
+    """
+    Debug version: computes all scores but skips GUI.
+    Forces n_clusters = 2.
+    """
+
+    def __init__(self, data, **kwargs):
+
+        self.data = data
+        self.kwargs = kwargs
+
+        figtitle = self.kwargs.get('figtitle', 'Hierarchical Clustering Analysis')
+        datalabels = self.kwargs.get('labels', None)
+
+        hrcal_model = AgglomerativeClustering()
+
+        # -------------------------
+        # INTERNAL VALIDITY SCORES
+        # -------------------------
+
+        self.scorefig = plt.figure(figsize=(10, 8))
+
+        # Silhouette
+        visualiser = KElbowVisualizer(
+            hrcal_model, k=(2, 11),
+            metric='silhouette',
+            timings=False,
+            locate_elbow=False
+        )
+        visualiser.fit(data)
+
+        self.scores = pd.DataFrame(
+            visualiser.k_scores_,
+            index=visualiser.k_values_,
+            columns=['Silhouette']
+        )
+
+        # Calinski-Harabasz
+        visualiser = KElbowVisualizer(
+            hrcal_model, k=(2, 11),
+            metric='calinski_harabasz',
+            timings=False,
+            locate_elbow=False
+        )
+        visualiser.fit(data)
+
+        self.scores['Calinski-Harabasz'] = visualiser.k_scores_
+
+        # Davies-Bouldin
+        db_scores = [
+            metrics.davies_bouldin_score(
+                data,
+                AgglomerativeClustering(n_clusters=k).fit_predict(data)
+            )
+            for k in range(2, 11)
+        ]
+
+        self.scores['Davies-Bouldin'] = db_scores
+
+        # Gap statistic
+        _, _, gapstats = gapstat(data, hrcal_model, max_k=10, calcStats=True)
+
+        gap_scores = gapstats['data'][:, list(gapstats['columns']).index('Gap')]
+        self.scores['Gap'] = gap_scores[1:-1]
+
+        # -------------------------
+        # SILHOUETTE SAMPLE STORAGE
+        # -------------------------
+
+        self.Silhouette_samples = {}
+
+        for k in range(2, 6):
+            templabels = AgglomerativeClustering(n_clusters=k).fit_predict(data)
+
+            silh_samp = metrics.silhouette_samples(data, templabels)
+            self.Silhouette_samples[k] = silh_samp
+
+        # -------------------------
+        # FORCE FINAL CLUSTERING
+        # -------------------------
+
+        self.n_clusters = 2
+
+        self.dendrofig = plt.figure(figsize=(6.5, 1.5))
+
+        self.clustlabels, self.dendro, self.finalscore_table, self.linkmat, _ = hierarch_clust(
+            self.data,
+            self.n_clusters,
+            datalabels
+        )
+
+        self.dendroax = plt.gca()
+
+        # Map dendrogram colours to cluster labels
+        self.colourid = pd.DataFrame({
+            'datalabels': self.dendro['ivl'],
+            'colourcode': self.dendro['leaves_color_list']
+        }).sort_values(by=['datalabels'], ignore_index=True)
+
+        self.colours = np.sort(self.colourid['colourcode'].unique())
+        self.colourid['clustlabel'] = 0
+
+        for label, colourcode in enumerate(self.colours):
+            self.colourid.loc[
+                self.colourid['colourcode'] == colourcode,
+                'clustlabel'
+            ] = int(label)
+
+        self.scorefig.suptitle(figtitle)
+        plt.close('all')   # prevents GUI windows during debugging
+
 
 
 def hierarch_clust(X, n_clusters, datalabels):
@@ -1837,6 +1952,38 @@ def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvar
     groupcolours = [datadict['multispeed']['ptlabels']['colourcode'].loc[
                             datadict['multispeed']['ptlabels']['clustlabel'] == g].iloc[0] for g in grouplabels]
 
+    ##############
+    a = {}
+    for vari, varname in enumerate(discvars):
+        a[varname] = np.concatenate(datadict['multispeed'][varname].T)
+
+    designfactors = {}
+    designfactors['group'] = np.tile(datadict['multispeed']['ptlabels']['clustlabel'].values, len(stages))
+    designfactors['rm'] = np.concatenate(
+        [[int(speeds[stgi])] * datadict['multispeed'][varname].shape[0] for stgi, stage in enumerate(stages)])
+    designfactors['rm'] = designfactors['rm'].astype(str)
+    designfactors['ptids'] = np.tile(datadict['multispeed']['ptlabels']['ptcode'].values, len(stages))
+
+
+    figs, b = run_0D_ANOVA2onerm(
+        a,
+        designfactors,
+        kinematics_titles,
+        kinematics_ylabels,
+        groupcolours,
+        ['11', '12', '13'],
+        group_names=['C1', 'C2'],
+        between_factor="clustlabel",
+        within_factor="speed",
+        between_label="C",
+        within_label="S",
+        within_vis=False
+    )
+
+    ##############
+
+
+
     # Initialise stat_comparison
     stat_comparison = {'0D': {}, '1D': {}}
 
@@ -1915,6 +2062,7 @@ def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvar
                            bbox_inches='tight')
         plt.close(discvarfig)
 
+
     # 1D variables: SPM 2 way ANOVA with one RM factor (speed) and one between factor (cluster)
     speedfig, speedaxs = plt.subplots(2, 3, figsize=(11, 4.5))
     speedaxs = speedaxs.flatten()
@@ -1967,7 +2115,8 @@ def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvar
                 # Top row: group by group for each speed
                 spm1d.plot.plot_mean_sd(Y[-1][np.where(group[-1] == lab)[0], :],
                                         x=np.linspace(0, 100, Y[-1].shape[1]),
-                                        linecolor=groupcolours[labi], facecolor=groupcolours[labi],
+                                        linecolor=groupcolours[labi],
+                                        facecolor=groupcolours[labi],
                                         ax=upperaxs[stgi])
 
             # Add vertical line at avge toe off (outside the previous loop so we can get the final ylimits)
@@ -1979,7 +2128,8 @@ def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvar
 
             # Speed figure
             spm1d.plot.plot_mean_sd(Y[-1], x=np.linspace(0, 100, Y[-1].shape[1]),
-                                    linecolor=speedcolours[stgi], facecolor=speedcolours[stgi],
+                                    linecolor=speedcolours[stgi],
+                                    facecolor=speedcolours[stgi],
                                     ax=speedaxs[vari])
 
             if stgi > 0:
@@ -2326,7 +2476,7 @@ def write_0Dposthoc_statstr(posthoctable, contrastvalue, withinfactor, withinfac
     return f't = {t}, p = {p}, d = {d}'
 
 
-def write_0DmixedANOVA_statstr(mixed_anovatable, between='', within='', betweenlabel='', withinlabel=''):
+def write_0DmixedANOVA_statstr(mixed_anovatable, between='', within='', betweenlabel='', withinlabel='', write_between=True, write_within=True, write_interaction=True):
 
     """
     Write a formatted string summarizing the results of a mixed ANOVA with one between-subjects factor and
@@ -2350,24 +2500,29 @@ def write_0DmixedANOVA_statstr(mixed_anovatable, between='', within='', betweenl
     if withinlabel == '':
         withinlabel = within
 
-    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == between].values < 0.001:
-        statstr = f'{betweenlabel}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, p < 0.001'
-    else:
-        statstr = (f'{betweenlabel}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, '
-                   f'p = {np.round(mixed_anovatable["p-unc"].values[0], 3)}')
+    statstr = ''
 
-    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'speed'].values < 0.001:
-        statstr += f'; {withinlabel}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, p < 0.001'
-    else:
-        statstr += (f'; {withinlabel}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, '
-                    f'p = {np.round(mixed_anovatable["p-unc"].values[1], 3)}')
+    if write_between:
+        if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == between].values < 0.001:
+            statstr += f'{betweenlabel}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, p < 0.001'
+        else:
+            statstr += (f'{betweenlabel}: F = {np.round(mixed_anovatable["F"].values[0], 2)}, '
+                       f'p = {np.round(mixed_anovatable["p-unc"].values[0], 3)}')
 
-    if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'Interaction'].values < 0.001:
-        statstr += (f'; {betweenlabel}x{withinlabel}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, '
-                    f'p < 0.001')
-    else:
-        statstr += (f'; {betweenlabel}x{withinlabel}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, '
-                    f'p = {np.round(mixed_anovatable["p-unc"].values[2], 2)}')
+    if write_within:
+        if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == within].values < 0.001:
+            statstr += f'; {withinlabel}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, p < 0.001'
+        else:
+            statstr += (f'; {withinlabel}: F = {np.round(mixed_anovatable["F"].values[1], 2)}, '
+                        f'p = {np.round(mixed_anovatable["p-unc"].values[1], 3)}')
+
+    if write_interaction:
+        if mixed_anovatable['p-unc'].loc[mixed_anovatable['Source'] == 'Interaction'].values < 0.001:
+            statstr += (f'; {betweenlabel}x{withinlabel}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, '
+                        f'p < 0.001')
+        else:
+            statstr += (f'; {betweenlabel}x{withinlabel}: F = {np.round(mixed_anovatable["F"].values[2], 2)}, '
+                        f'p = {np.round(mixed_anovatable["p-unc"].values[2], 2)}')
 
     return statstr
 
