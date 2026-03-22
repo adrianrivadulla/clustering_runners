@@ -1953,9 +1953,9 @@ def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvar
                             datadict['multispeed']['ptlabels']['clustlabel'] == g].iloc[0] for g in grouplabels]
 
     ##############
-    a = {}
+    dataholder = {}
     for vari, varname in enumerate(discvars):
-        a[varname] = np.concatenate(datadict['multispeed'][varname].T)
+        dataholder[varname] = np.concatenate(datadict['multispeed'][varname].T)
 
     designfactors = {}
     designfactors['group'] = np.tile(datadict['multispeed']['ptlabels']['clustlabel'].values, len(stages))
@@ -1964,21 +1964,23 @@ def multispeed_kinematics_comparison(datadict, stages, speeds, discvars, contvar
     designfactors['rm'] = designfactors['rm'].astype(str)
     designfactors['ptids'] = np.tile(datadict['multispeed']['ptlabels']['ptcode'].values, len(stages))
 
-
-    figs, b = run_0D_ANOVA2onerm(
-        a,
+    figs, stat_comparison["OD"] = run_0D_ANOVA2onerm(
+        datadict,
         designfactors,
-        kinematics_titles,
-        kinematics_ylabels,
-        groupcolours,
-        ['11', '12', '13'],
-        group_names=['C1', 'C2'],
         between_factor="clustlabel",
         within_factor="speed",
+        titles=kinematics_titles,
+        ylabels=kinematics_ylabels,
+        group_names=['C0', 'C1'],
+        group_colours=groupcolours,
+        rm_names=['11', '12', '13'],
+        rm_colours=speedcolours,
         between_label="C",
         within_label="S",
         within_vis=False
     )
+
+    a = 5
 
     ##############
 

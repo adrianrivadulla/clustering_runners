@@ -34,6 +34,7 @@ TODO.
 
 
 # %% Imports
+import config
 import os
 import datetime
 import itertools
@@ -45,40 +46,12 @@ import matplotlib
 import matplotlib.colors as mcolors
 from sklearn.metrics.cluster import adjusted_mutual_info_score
 from clustering_utils import *
-from data_wrangling_utils import *
 import copy
-from research_utils.pipelines import run_0D_ANOVA2onerm
+from research_utils.pipelines import run_0D_ANOVA2onerm, run_demoanthrophys_two_groups_comparisons
+from utils.data_processing import load_mastersheet_and_kinematics
 
 
 # %% Defaults
-# Project dir wherever this script is
-projectdir = os.path.dirname(os.path.realpath(__file__))
-
-# Data dir
-datadir = os.path.join(projectdir, 'data')
-
-# Report dir for saving figures
-reportdir = os.path.join(projectdir, 'report')
-
-# Create it if it doesn't exist
-if not os.path.exists(reportdir):
-    os.makedirs(reportdir)
-else:
-    print(f'Report directory found. Existing files will be overwritten.')
-
-# Master datasheet
-masterdatapath = os.path.join(datadir, 'MasterDataSheet.xlsx')
-
-# kinematics data
-kindatapath = os.path.join(datadir, 'AllCurves_ptavgs.npy')
-
-# Matplotlib style
-matplotlib.use('Qt5Agg')
-matplotlib.style.use('default')
-
-# Update default rcParams
-plt.rcParams['axes.spines.top'] = False
-plt.rcParams['axes.spines.right'] = False
 
 # Saving keyword
 savingkw = 'Clust'
@@ -89,107 +62,17 @@ stages = ['STG_02', 'STG_03', 'STG_04']
 # Speeds of interest
 speeds = [9 + int(stage[-2:]) for stage in stages]
 
-# Wanted variables for clustering
-discvars = ['STRIDEFREQ', 'DUTYFACTOR']
-contvars = ['RCOM_2', 'RTRUNK2PELVIS_0', 'RPELV_ANG_0', 'RHIP_0', 'RKNEE_0', 'RANK_0']
-wantedvars = discvars + contvars
-
-# For figure decoration
-stg_titles = ['11 km/h', '12 km/h', '13 km/h', 'Multispeed']
-kinematics_titles = {'STRIDEFREQ': 'Stride frequency',
-                     'DUTYFACTOR': 'Duty factor',
-                     'RCOM_2': 'vCOM',
-                     'RTRUNK2PELVIS_0': 'Trunk-pelvis',
-                     'RHIP_0': 'Hip',
-                     'RPELV_ANG_0': 'Pelvis tilt',
-                     'RKNEE_0': 'Knee',
-                     'RANK_0': 'Ankle',
-                     }
-
-# Ylims for bottom axs in reconstruction quality figures
-recbot_ylims = [[-0.125, 0.125], [-0.025, 0.025], [-0.0125, 0.0125], [-5, 5], [-5, 5], [-5, 5], [-5, 5], [-5, 5]]
-
-# Short ylabels for kinematics
-short_ylabels = ['Hz/leg', 'CT/ST', '< D - U >', '< F - E >', '< A - P >', '< E - F >', '< E - F >', '< P - D >']
-
-# Labels for final figs
-kinematics_ylabels = {'STRIDEFREQ': 'Hz/leg',
-                      'DUTYFACTOR': 'CT/ST',
-                      'RCOM_2': 'Position (m/leg) \n< Down - Up >',
-                      'RTRUNK2PELVIS_0': '${\Theta}$ (°) \n< Flex - Ext >',
-                      'RHIP_0': '${\Theta}$ (°) \n< Ext - Flex >',
-                      'RPELV_ANG_0': '${\Theta}$ (°) \n< Ant - Post >',
-                      'RKNEE_0': '${\Theta}$ (°) \n< Ext - Flex >',
-                      'RANK_0': '${\Theta}$ (°) \n< Plantar - Dorsi >',
-                      }
-
-# Wanted scores with the optimum for the plot
-wanted_scores = {'Silhouette': '1',
-                 'Calinski-Harabasz': 'largest',
-                 'Davies-Bouldin': '0'}
-
-# Acceptable errors
-acceptable_errors = {'STRIDEFREQ': 0.05,
-                     'DUTYFACTOR': 0.01,
-                     'RCOM_2': 0.005,
-                     'RTRUNK2PELVIS_0': 2,
-                     'RPELV_ANG_0': 2,
-                     'RHIP_0': 2,
-                     'RKNEE_0': 2,
-                     'RANK_0': 2}
-
-# Demographics, anthropometrics and physiological variables and titles
-demoanthrophysvars_titles = {'Age': 'Age',
-                             'Height': 'Height',
-                             'Mass': 'Mass',
-                             'TrunkLgth': 'Trunk length',
-                             'PelvWidth': 'Pelvis width',
-                             'LegLgth_r': 'Leg length',
-                             'ThiLgth_r': 'Thigh length',
-                             'ShaLgth_r': 'Shank length',
-                             'FootLgth_r': 'Foot length',
-                             'LT': 'LT',
-                             'VO2peakkg': 'VO2peak',
-                             'RE': 'Running Economy',
-                             'RELT': 'Running Economy LT',
-                             'RunningDaysAWeek': 'Weekly runs',
-                             'KmAWeek': 'Weekly volume',
-                             'Time10Ks': '10k time'
-                             }
-
-# Names and units for figures
-demoanthrophysvars_ylabels = {'Sex': 'Females (%)',
-                              'Age': 'years',
-                              'Height': 'm',
-                              'Mass': 'kg',
-                              'TrunkLgth': 'm',
-                              'LegLgth_r': 'm',
-                              'PelvWidth': 'm',
-                              'ThiLgth_r': 'm',
-                              'ShaLgth_r': 'm',
-                              'FootLgth_r': 'm',
-                              'LT': 'km/h',
-                              'VO2peakkg': 'ml/min/kg',
-                              'RunningDaysAWeek': 'count',
-                              'KmAWeek': 'km',
-                              'Time10Ks': 'mm:ss',
-                              'RE': 'kcal/min/kg',
-                              }
-
-# Speed linestyles
-speedcolours = ['C0', 'C6', 'C3']
-
 # recquality colours
 recqualcolours = [['C0'], ['C6'], ['C3'], ['C0', 'C6', 'C3']]
 
-# %% Data loading and wrangling
-master, clustdata, vartracker, pts = load_mastersheet_and_kinematics(masterdatapath,
-                                                                     kindatapath,
+# %% Data loading and wrangling TODO. Integrate with mastersheet data prep from fatigue
+master, clustdata, vartracker, pts = load_mastersheet_and_kinematics(config.masterdatapath,
+                                                                     config.datapath,
                                                                      stages,
                                                                      speeds,
-                                                                     wantedvars,
-                                                                     discvars,
-                                                                     contvars)
+                                                                     config.wantedvars,
+                                                                     config.discvars,
+                                                                     config.contvars)
 
 # %% Perform PCA and clustering analysis for each stage
 
@@ -204,16 +87,16 @@ stat_comparison = {}
 for stgi, stage in enumerate(clustdata.keys()):
 
     # Preallocate scores for each stage
-    scores_by_k[stage] = {scorename: pd.DataFrame() for scorename in wanted_scores.keys()}
+    scores_by_k[stage] = {scorename: pd.DataFrame() for scorename in config.wanted_scores.keys()}
 
     # For figure creation and saving
-    figinfo = {'reportdir': reportdir,
+    figinfo = {'reportdir': config.reportdir,
                 'savingkw': savingkw,
                 'colour': recqualcolours[stgi],
-                'acceptable_errors': acceptable_errors,
-                'kinematics_titles': kinematics_titles,
-                'short_ylabels': short_ylabels,
-                'recbot_ylims': recbot_ylims}
+                'acceptable_errors': config.acceptable_errors,
+                'kinematics_titles': config.kinematics_titles,
+                'short_ylabels': config.short_ylabels,
+                'recbot_ylims': config.recbot_ylims}
 
     # Prepare data, perform PCA and run reconstruction analysis
     pcaed, dr_scores[stage] = pca_dimensionality_reduction(clustdata[stage], vartracker[stage], stage, figinfo)
@@ -226,7 +109,7 @@ for stgi, stage in enumerate(clustdata.keys()):
     HCA.colourid = HCA.colourid.rename(columns={'datalabels': 'ptcode'})
 
     # Store results
-    for scorename in wanted_scores.keys():
+    for scorename in config.wanted_scores.keys():
         scores_by_k[stage][scorename] = HCA.scores[scorename]
     clust_scores.loc[stage] = HCA.scores.loc[HCA.n_clusters]
     dendros.append(HCA.dendro)
@@ -237,7 +120,7 @@ for stgi, stage in enumerate(clustdata.keys()):
         append_bottom_leaves_dendrogram(HCA.dendroax)
 
         # Set title adding the Silhouette score
-        HCA.dendroax.set_title(f'{stg_titles[stgi]} '
+        HCA.dendroax.set_title(f'{config.stg_titles[stgi]} '
                            f'(Silh = {np.round(HCA.finalscore_table.loc["Silhouette"].values[0], 3)})')
 
     if len(dendros) == 1:
@@ -256,7 +139,7 @@ for stgi, stage in enumerate(clustdata.keys()):
 
         # Transition analysis from previous to current partition
         trans_analysis = TransitionAnalysis(ptlabels[stages[stgi - 1]], HCA.colourid, HCA.dendrofig, HCA.dendroax)
-        trans_analysis.dendroax.set_title(f'{stg_titles[stgi]} '
+        trans_analysis.dendroax.set_title(f'{config.stg_titles[stgi]} '
                                           f'(Silh = {np.round(HCA.finalscore_table.loc["Silhouette"].values[0], 3)}, '
                                           f'AMI = {np.round(trans_analysis.ami, 3)})')
 
@@ -270,8 +153,8 @@ for stgi, stage in enumerate(clustdata.keys()):
         clustdata[stage]['ptlabels'] = trans_analysis.curr_colourid
 
     # Save and close figures
-    HCA.scorefig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_HCA_scores.png'), dpi=300, bbox_inches='tight')
-    HCA.dendrofig.savefig(os.path.join(reportdir, f'{savingkw}_{stage}_finaldendro.png'), dpi=300, bbox_inches='tight')
+    HCA.scorefig.savefig(os.path.join(config.reportdir, f'{savingkw}_{stage}_HCA_scores.png'), dpi=300, bbox_inches='tight')
+    HCA.dendrofig.savefig(os.path.join(config.reportdir, f'{savingkw}_{stage}_finaldendro.png'), dpi=300, bbox_inches='tight')
     plt.close(HCA.scorefig)
     plt.close(HCA.dendrofig)
     plt.close(HCA.dendrofig)
@@ -286,47 +169,47 @@ for stgi, stage in enumerate(clustdata.keys()):
     if stage != 'multispeed':
 
         # For figure creation and saving
-        figinfo = {'reportdir': reportdir,
+        figinfo = {'reportdir': config.reportdir,
                    'savingkw': savingkw,
-                   'study_title': stg_titles[stgi],
-                   'kinematics_titles': kinematics_titles,
-                   'kinematics_ylabels': kinematics_ylabels}
+                   'study_title': config.stg_titles[stgi],
+                   'kinematics_titles': config.kinematics_titles,
+                   'kinematics_ylabels': config.kinematics_ylabels}
 
         stat_comparison[stage] = single_speed_kinematics_comparison(clustdata[stage],
-                                                                    discvars,
-                                                                    contvars,
+                                                                    config.discvars,
+                                                                    config.contvars,
                                                                     figinfo)
 
 # Save multispeed ptlabels to file
-clustdata['multispeed']['ptlabels'].to_csv(os.path.join(reportdir, f'{savingkw}_multispeed_ptlabels.csv'), index=False)
+clustdata['multispeed']['ptlabels'].to_csv(os.path.join(config.reportdir, f'{savingkw}_multispeed_ptlabels.csv'), index=False)
 
 # %% Score analysis
 
 # Create figure
-scorefig, scoreaxs = plt.subplots(1, len(wanted_scores), figsize=(11, 2))
+scorefig, scoreaxs = plt.subplots(1, len(config.wanted_scores), figsize=(11, 2))
 
-for scorei, scorename in enumerate(wanted_scores.keys()):
+for scorei, scorename in enumerate(config.wanted_scores.keys()):
     for stgi, stage in enumerate(clustdata.keys()):
         if stage != 'multispeed':
             scoreaxs[scorei].plot(scores_by_k[stage][scorename].index, scores_by_k[stage][scorename].values, '-o',
-                                  color=speedcolours[stgi])
+                                  color=config.speedcolours[stgi])
         else:
             scoreaxs[scorei].plot(scores_by_k[stage][scorename].index, scores_by_k[stage][scorename].values, '-o',
                                   color='k')
 
     scoreaxs[scorei].set_xlabel('k')
     scoreaxs[scorei].set_title(scorename)
-    scoreaxs[scorei].text(0.98, 0.98, f'optimum: {wanted_scores[scorename]}', ha='right', va='top',
+    scoreaxs[scorei].text(0.98, 0.98, f'optimum: {config.wanted_scores[scorename]}', ha='right', va='top',
                           transform=scoreaxs[scorei].transAxes)
 
-scoreaxs[-1].legend(stg_titles,
+scoreaxs[-1].legend(config.stg_titles,
                     loc='lower center',
                     bbox_to_anchor=(0.5, 0),
-                    ncol=len(stg_titles),
+                    ncol=len(config.stg_titles),
                     bbox_transform=scorefig.transFigure,
                     frameon=False)
 plt.subplots_adjust(bottom=0.35)
-scorefig.savefig(os.path.join(reportdir, f'{savingkw}_score_analysis.png'), dpi=300, bbox_inches='tight')
+scorefig.savefig(os.path.join(config.reportdir, f'{savingkw}_score_analysis.png'), dpi=300, bbox_inches='tight')
 plt.close(scorefig)
 
 # %% Consistency assessment
@@ -388,228 +271,76 @@ selmaster['clustlabel'] = clustdata['multispeed']['ptlabels']['clustlabel'].valu
 stat_comparison['multispeed'] = {'demophysanthro': {}, '0D': {}, '1D': {}}
 
 #%% Demographics, anthropometrics and physiological variables ignoring EE
-stat_comparison['multispeed']['demophysanthro'] = comparison_0D_contvar_indgroups(
-    {key: master[key].loc[clustdata['multispeed']['ptlabels']['ptcode']].values for key in
-     demoanthrophysvars_titles.keys() if 'RE' not in key},
-    clustdata['multispeed']['ptlabels']['clustlabel'],
-    f'{savingkw}_{stage}',
-    reportdir,
-    uniqclustcolours)
 
-# Make figures
-demoanthrophysfig, demoanthrophysaxs = plt.subplots(3, 5, figsize=(11, 6))
-demoanthrophysaxs = demoanthrophysaxs.flatten()
+if len(uniqclustlabels) != 2:
+    raise ValueError('To replicate the analysis in the paper, please select 2 clusters in the multispeed analysis.')
 
-for vari, varname in enumerate([key for key in demoanthrophysvars_ylabels.keys() if key != 'RE']):
+req_variables = (
+    [key for key in config.demoanthrophysvars_titles if key != "RE"]
+    + [f"EE{speed}kg" for speed in speeds]
+    + ["clustlabel"]
+)
 
-    if varname == 'Sex':
-
-        fempctge = []
-        sextable = []
-
-        for clusti, uniqclust in enumerate(uniqclustlabels):
-
-            # Get pts in that cluster
-            clustmaster = master.loc[clustdata['multispeed']['ptlabels']['ptcode'].loc[
-                clustdata['multispeed']['ptlabels']['clustlabel'] == uniqclust]]
-            fempctge.append(len(clustmaster.loc[clustmaster['Sex'] == 'Female']) / len(clustmaster) * 100)
-
-            # Get number of females and males in that cluster
-            sextable.append([len(clustmaster.loc[clustmaster['Sex'] == 'Female']),
-                             len(clustmaster.loc[clustmaster['Sex'] == 'Male'])])
-
-        # Add chi square test
-        stat_comparison['multispeed']['demophysanthro'][varname] = {}
-        stat_comparison['multispeed']['demophysanthro'][varname]['chi_test'] = {}
-        stat_comparison['multispeed']['demophysanthro'][varname]['chi_test']['chi_sq'], \
-            stat_comparison['multispeed']['demophysanthro'][varname]['chi_test']['p'], _, _ = stats.chi2_contingency(
-            sextable)
-
-        # Bar plot
-        sns.barplot(ax=demoanthrophysaxs[vari], x=uniqclustlabels, y=fempctge, palette=uniqclustcolours)
-
-        # Set xticks
-        demoanthrophysaxs[vari].set_xticks(demoanthrophysaxs[vari].get_xticks(),
-                                           [f'C{int(x)}' for x in demoanthrophysaxs[vari].get_xticks()])
-
-    elif varname == 'RunningDaysAWeek':
-
-        # Count plot
-        sns.countplot(ax=demoanthrophysaxs[vari],
-                      x=master[varname].loc[clustdata['multispeed']['ptlabels']['ptcode']],
-                      hue=clustdata['multispeed']['ptlabels']['clustlabel'].values,
-                      palette=uniqclustcolours)
-
-        # Remove legend
-        demoanthrophysaxs[vari].get_legend().remove()
-
-        # Remove xlabel
-        demoanthrophysaxs[vari].set_xlabel('')
-
-    else:
-
-        # Violin plot
-        sns.violinplot(ax=demoanthrophysaxs[vari],
-                       x=clustdata['multispeed']['ptlabels']['clustlabel'].values,
-                       y=master[varname].loc[clustdata['multispeed']['ptlabels']['ptcode']].values,
-                       palette=uniqclustcolours)
-
-        # Xticks
-        demoanthrophysaxs[vari].set_xticks(demoanthrophysaxs[vari].get_xticks(),
-                                           [f'C{int(x)}' for x in demoanthrophysaxs[vari].get_xticks()])
-
-    # Yticks for Time10Ks
-    if varname == 'Time10Ks':
-        # Convert to datetime and keep just mm:ss
-        yticks = [str(datetime.timedelta(seconds=x)) for x in demoanthrophysaxs[vari].get_yticks()]
-        yticks = [x[x.find(':') + 1:] for x in yticks]
-
-        # Set new ticks
-        demoanthrophysaxs[vari].set_yticklabels(yticks)
-
-    # Ylabels
-    demoanthrophysaxs[vari].set_ylabel(demoanthrophysvars_ylabels[varname])
-
-    # Title
-    if varname in demoanthrophysvars_titles.keys():
-        title = demoanthrophysvars_titles[varname]
-    elif varname == 'Sex':
-        title = 'Sex'
-
-    if varname in stat_comparison['multispeed']['demophysanthro'].keys():
-
-        # Get key which is not normality
-        stat_test = \
-        [key for key in stat_comparison['multispeed']['demophysanthro'][varname].keys() if key != 'normality'][0]
-
-        # Add asterisk to indicate significant differences
-        if stat_comparison['multispeed']['demophysanthro'][varname][stat_test]['p'] < 0.05:
-            demoanthrophysaxs[vari].set_title(f'{title} *')
-        else:
-            demoanthrophysaxs[vari].set_title(title)
-
-    else:
-        demoanthrophysaxs[vari].set_title(title)
-
-plt.tight_layout()
+stat_comparison["demoanthrophys"], demoanthrophysfig, normfigs, refig = run_demoanthrophys_two_groups_comparisons(
+    selmaster[req_variables],
+    grouping_var="clustlabel",
+    re_speeds=speeds,
+    titles=config.demoanthrophysvars_titles,
+    ylabels=config.demoanthrophysvars_ylabels,
+    group_names=[f'C{int(x)}' for x in range(len(uniqclustlabels))],
+    group_colours=uniqclustcolours,
+)
 
 # Save and close
-demoanthrophysfig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_demophysanthro.png'), dpi=300,
+demoanthrophysfig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_demophysanthro.png'), dpi=300,
                           bbox_inches='tight')
 plt.close(demoanthrophysfig)
+for var, fig in normfigs.items():
+    fig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_{var}QQplot.png'), dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
-#%% RE variables
-
-# Get EE data into a dataframe
-redf = pd.DataFrame()
-redf['EE'] = np.concatenate([selmaster[f'EE{speed}kg'].values for speed in speeds])
-redf['speed'] = np.concatenate([[int(speed)] * len(pts) for speed in speeds])
-redf['clustlabel'] = np.tile(clustdata['multispeed']['ptlabels']['clustlabel'].values, len(stages))
-redf['ptcode'] = np.tile(clustdata['multispeed']['ptlabels']['ptcode'].values, len(stages))
-
-stat_comparison['multispeed']['demophysanthro']['EE'] = anova2onerm_0d_and_posthocs(redf,
-                                                                                    dv='EE',
-                                                                                    within='speed',
-                                                                                    between='clustlabel',
-                                                                                    subject='ptcode')
-
-refig, reaxs = plt.subplots(1, 3, figsize=(11, 3))
-reaxs = reaxs.flatten()
-
-# Plot results
-for speedi, speed in enumerate(speeds):
-
-    # Violin plot
-    sns.violinplot(ax=reaxs[speedi],
-                   x='clustlabel',
-                   y='EE',
-                   data=redf.loc[redf['speed'] == speed],
-                   palette=uniqclustcolours,
-                   hue='clustlabel',
-                   legend=False)
-
-    # Add C at the start of each xtick
-    reaxs[speedi].set_xticks(reaxs[speedi].get_xticks(),
-                             [f'C{int(x)}' for x in reaxs[speedi].get_xticks()])
-
-    # Add stats in xlabel
-    if (stat_comparison['multispeed']['demophysanthro']['EE']['ANOVA2onerm']['p-unc'].loc[
-        stat_comparison['multispeed']['demophysanthro']['EE']['ANOVA2onerm']['Source'] == 'clustlabel'].values
-            < 0.05):
-
-        statsstr = write_0Dposthoc_statstr(stat_comparison['multispeed']['demophysanthro']['EE']['posthocs'],
-                                           'speed * clustlabel',
-                                           'speed',
-                                           speed)
-        reaxs[speedi].set_xlabel(f'C: {statsstr}', fontsize=10)
-
-    else:
-        reaxs[speedi].set_xlabel(' ', fontsize=10)
-
-    # y label
-    if speedi == 0:
-        reaxs[speedi].set_ylabel(demoanthrophysvars_ylabels['RE'])
-    else:
-        reaxs[speedi].set_ylabel('')
-
-    # Add title
-    reaxs[speedi].set_title(f'{speed} km/h')
-
-# Same y limits
-ylims = [ax.get_ylim() for ax in reaxs]
-for ax in reaxs:
-    ax.set_ylim([min([ylim[0] for ylim in ylims]), max([ylim[1] for ylim in ylims])])
-
-# Set suptitle
-statsstr = write_0DmixedANOVA_statstr(stat_comparison['multispeed']['demophysanthro']['EE']['ANOVA2onerm'],
-                                      between='clustlabel',
-                                      within='speed',
-                                      betweenlabel='C',
-                                      withinlabel='S')
-
-# Set title
-refig.suptitle(f'Running economy\n{statsstr}')
-
-# Save and close
-plt.tight_layout()
-refig.savefig(os.path.join(reportdir, f'{savingkw}_multispeed_RE_ANOVA2onerm.png'), dpi=300, bbox_inches='tight')
+refig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_RE_ANOVA2onerm.png'), dpi=300, bbox_inches='tight')
 plt.close(refig)
 
 # %% Kinematics comparison
-figinfo = {'reportdir': reportdir,
+figinfo = {'reportdir': config.reportdir,
            'savingkw': savingkw,
-           'speedcolours': speedcolours,
-           'kinematics_titles': kinematics_titles,
-           'kinematics_ylabels': kinematics_ylabels,
-           'stg_titles': stg_titles}
+           'speedcolours': config.speedcolours,
+           'kinematics_titles': config.kinematics_titles,
+           'kinematics_ylabels': config.kinematics_ylabels,
+           'stg_titles': config.stg_titles}
 
 #  Potentially go in a function TODO. this is what you'll have to do for the function in research utils to work. just set the data correctly
-datadict = {varname: np.concatenate(clustdata['multispeed'][varname].T) for varname in discvars} # TODO. Potentially extend to contvars
+datadict = {varname: np.concatenate(clustdata['multispeed'][varname].T) for varname in config.discvars} # TODO. Potentially extend to contvars
 designfactors = {}
 designfactors['group'] = np.tile(clustdata['multispeed']['ptlabels']['clustlabel'].values, len(stages))
 designfactors['rm'] = np.concatenate(
-    [[int(speeds[stgi])] * clustdata['multispeed'][discvars[0]].shape[0] for stgi, stage in enumerate(stages)])
+    [[int(speeds[stgi])] * clustdata['multispeed'][config.discvars[0]].shape[0] for stgi, stage in enumerate(stages)])
 designfactors['rm'] = designfactors['rm'].astype(str)
-designfactors['rm'] = [s + ' km/h' for s in designfactors['rm']]
 designfactors['ptids'] = np.tile(clustdata['multispeed']['ptlabels']['ptcode'].values, len(stages))
 
 
-figs, b = run_0D_ANOVA2onerm(
+figs, stat_comparison["multispeed"]["OD"] = run_0D_ANOVA2onerm(
     datadict,
     designfactors,
-    kinematics_titles,
-    kinematics_ylabels,
-    uniqclustcolours,
-    ['11', '12', '13'],
-    group_names=['C0', 'C1'],
     between_factor="clustlabel",
     within_factor="speed",
+    titles=config.kinematics_titles,
+    ylabels=config.kinematics_ylabels,
+    group_names=['C0', 'C1'],
+    group_colours=uniqclustcolours,
+    rm_names=['11', '12', '13'],
+    rm_colours=config.speedcolours,
     between_label="C",
     within_label="S",
     within_vis=False
 )
 
 # TODO. Add km/h to the titles if you want and figure saving stuff
+
+
+# TODO. Sort 1D data and use SPM anova
+
 
 stat_comparison['multispeed'] = multispeed_kinematics_comparison(clustdata,
                                                                  stages,
