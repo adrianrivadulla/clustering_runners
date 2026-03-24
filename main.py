@@ -47,8 +47,9 @@ import matplotlib.colors as mcolors
 from sklearn.metrics.cluster import adjusted_mutual_info_score
 from clustering_utils import *
 import copy
-from research_utils.pipelines import run_0D_ANOVA2onerm, run_demoanthrophys_two_groups_comparisons
+from research_utils.pipelines import run_0D_ANOVA2onerm, run_demoanthrophys_two_groups_comparisons, run_SPM_ANOVA2onerm
 from utils.data_processing import load_mastersheet_and_kinematics
+from utils.vis import add_suffix_to_titles
 
 
 # %% Defaults
@@ -303,15 +304,8 @@ refig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_RE_ANOVA2on
 plt.close(refig)
 
 # %% Kinematics comparison
-figinfo = {'reportdir': config.reportdir,
-           'savingkw': savingkw,
-           'speedcolours': config.speedcolours,
-           'kinematics_titles': config.kinematics_titles,
-           'kinematics_ylabels': config.kinematics_ylabels,
-           'stg_titles': config.stg_titles}
 
-#  Potentially go in a function TODO. this is what you'll have to do for the function in research utils to work. just set the data correctly
-datadict = {varname: np.concatenate(clustdata['multispeed'][varname].T) for varname in config.discvars} # TODO. Potentially extend to contvars
+# Get design factors for stats TODO. this is what you'll have to do for the function in research utils to work.
 designfactors = {}
 designfactors['group'] = np.tile(clustdata['multispeed']['ptlabels']['clustlabel'].values, len(stages))
 designfactors['rm'] = np.concatenate(
@@ -319,9 +313,10 @@ designfactors['rm'] = np.concatenate(
 designfactors['rm'] = designfactors['rm'].astype(str)
 designfactors['ptids'] = np.tile(clustdata['multispeed']['ptlabels']['ptcode'].values, len(stages))
 
-
-figs, stat_comparison["multispeed"]["OD"] = run_0D_ANOVA2onerm(
-    datadict,
+# Run ANOVA2onrm for disc vars
+discdata = {varname: np.concatenate(clustdata['multispeed'][varname].T) for varname in config.discvars}
+figs, stat_comparison["multispeed"]["0D"] = run_0D_ANOVA2onerm(
+    discdata,
     designfactors,
     between_factor="clustlabel",
     within_factor="speed",
@@ -336,15 +331,53 @@ figs, stat_comparison["multispeed"]["OD"] = run_0D_ANOVA2onerm(
     within_vis=False
 )
 
-# TODO. Add km/h to the titles if you want and figure saving stuff
+# Save figures adding km/h to the title
+for var, fig in figs.items():
+    add_suffix_to_titles(fig, ' km/h')
+    fig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_{var}_ANOVA2onerm.png'), dpi=300, bbox_inches='tight')
+    plt.close(fig)
 
+# Run ANOVA2onrm for cont vars
+contdata = {
+    var: np.concatenate([values[var] for key, values in clustdata.items() if key != "multispeed"], axis=0)
+    for var in config.contvars
+}
 
-# TODO. Sort 1D data and use SPM anova
+# contdata = {
+#     var: np.concatenate([values[var] for key, values in clustdata.items() if key != "multispeed"], axis=0)
+#     for var in ['RCOM_2']
+# }
 
+stat_comparison["multispeed"]["1D"], kinspmfigs, kinfigs, kinrmfig = run_SPM_ANOVA2onerm(
+    contdata,
+    designfactors,
+    spm_random_seed=45,
+    titles=config.kinematics_titles,
+    ylabels=config.kinematics_ylabels,
+    group_names=['C0', 'C1'],
+    group_colours=uniqclustcolours,
+    rm_names=['11', '12', '13'],
+    rm_colours=config.speedcolours,
+    between_label="C",
+    within_label="S",
+    rm_fig_rows=2,
+    rm_fig_cols=3,
+    vline_var=discdata["DUTYFACTOR"],
+    rm_spm_patches="anova2onerm",
+)
 
-stat_comparison['multispeed'] = multispeed_kinematics_comparison(clustdata,
-                                                                 stages,
-                                                                 speeds,
-                                                                 discvars,
-                                                                 contvars,
-                                                                 figinfo)
+# Save figures
+for var, fig in kinfigs.items():
+    # Add km/h to the title
+    add_suffix_to_titles(fig, ' km/h')
+    fig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_{var}_ANOVA2onerm.png'), dpi=300,
+                bbox_inches='tight')
+    plt.close(fig)
+
+for var, fig in kinspmfigs.items():
+    fig.savefig(os.path.join(config.reportdir, f"{savingkw}_multispeed_{var}.png"), dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+kinrmfig.savefig(os.path.join(config.reportdir, f'{savingkw}_multispeed_kinematics_by_speed.png'), dpi=300,
+                 bbox_inches='tight')
+plt.close(kinrmfig)
