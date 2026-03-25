@@ -46,6 +46,7 @@ import matplotlib.colors as mcolors
 
 from research_utils.pipelines import run_0D_ANOVA2onerm # TODO. temp to be removed
 from research_utils.vis import add_sig_spm_cluster_patch
+from research_utils.statistics import compare_0D_contvar_indgroups_one_condition, compare_1D_contvar_indgroups_one_condition
 # %% Utils
 
 
@@ -1476,6 +1477,8 @@ def comparison_1D_contvar_indgroups(datadict, grouping, title_kword, figdir, col
 
 def single_speed_kinematics_comparison(datadict, discvars, contvars, figargs):
 
+    # TODO. You are refactoring this function. Rename it to something like run_... and move it research_utils.pipelines when happy. this is also used in dimred
+
     """
     Compare kinematic variables between two groups at a single speed and visualize the results.
 
@@ -1511,13 +1514,12 @@ def single_speed_kinematics_comparison(datadict, discvars, contvars, figargs):
 
     # Perform 0D and 1D statistical comparisons
     stat_comparison = {'0D': {}, '1D': {}}
-    stat_comparison['0D'] = comparison_0D_contvar_indgroups({key: datadict[key] for key in discvars},
+    stat_comparison['0D'], normfigs = compare_0D_contvar_indgroups_one_condition({key: datadict[key] for key in discvars},
                                                                    datadict['ptlabels']['clustlabel'],
-                                                                   savingkw,
-                                                                   reportdir,
-                                                                   groupcolours)
+                                                                   colours=groupcolours,
+                                                                   group_names=grouplabels)
 
-    stat_comparison['1D'] = comparison_1D_contvar_indgroups({key: datadict[key] for key in contvars},
+    stat_comparison['1D'], figs = compare_1D_contvar_indgroups_one_condition({key: datadict[key] for key in contvars},
                                                                    datadict['ptlabels']['clustlabel'],
                                                                    savingkw,
                                                                    reportdir,
@@ -1550,8 +1552,8 @@ def single_speed_kinematics_comparison(datadict, discvars, contvars, figargs):
             kinaxs[vari].set_xticks(kinaxs[vari].get_xticks(),
                                     [f'C{int(x)}' for x in kinaxs[vari].get_xticks()])
 
-            # Get key which is not normality
-            stat_test = [key for key in stat_comparison['0D'][varname].keys() if key != 'normality'][0]
+            # Get key which is not normality or homoscedasticity to check for significance
+            stat_test = [key for key in stat_comparison['0D'][varname].keys() if key not in ['normality', 'homoscedasticity']][0]
 
             # Add asterisk to the title to indicate significant differences
             if stat_comparison['0D'][varname][stat_test]['p'] < 0.05:

@@ -36,14 +36,11 @@ TODO.
 # %% Imports
 import config
 import os
-import datetime
 import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import scipy.stats as stats
-import matplotlib
-import matplotlib.colors as mcolors
 from sklearn.metrics.cluster import adjusted_mutual_info_score
 from clustering_utils import *
 import copy
