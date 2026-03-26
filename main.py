@@ -44,7 +44,7 @@ import scipy.stats as stats
 from sklearn.metrics.cluster import adjusted_mutual_info_score
 from clustering_utils import *
 import copy
-from research_utils.pipelines import run_0D_ANOVA2onerm, run_demoanthrophys_two_groups_comparisons, run_SPM_ANOVA2onerm
+from research_utils.pipelines import run_0D_ANOVA2onerm, run_demoanthrophys_two_groups_comparisons, run_SPM_ANOVA2onerm, run_single_condition_comparison
 from utils.data_processing import load_mastersheet_and_kinematics
 from utils.vis import add_suffix_to_titles
 
@@ -166,17 +166,28 @@ for stgi, stage in enumerate(clustdata.keys()):
     #%% Stat comparison of single speed clustering
     if stage != 'multispeed':
 
-        # For figure creation and saving
-        figinfo = {'reportdir': config.reportdir,
-                   'savingkw': savingkw,
-                   'study_title': config.stg_titles[stgi],
-                   'kinematics_titles': config.kinematics_titles,
-                   'kinematics_ylabels': config.kinematics_ylabels}
-
-        stat_comparison[stage] = single_speed_kinematics_comparison(clustdata[stage],
+        # TODO. Revise why you are getting different stats in 0D
+        stat_comparison[stage], normfigs, spmfigs, kinfig = run_single_condition_comparison(clustdata[stage],
                                                                     config.discvars,
                                                                     config.contvars,
-                                                                    figinfo)
+                                                                 titles=config.kinematics_titles,
+                                                                 ylabels=config.kinematics_ylabels,
+                                                                 vline_var=clustdata[stage]['DUTYFACTOR'])
+
+        a = 5
+
+        # Save figures
+        for var, fig in normfigs.items():
+            fig.savefig(os.path.join(config.reportdir, f'{savingkw}_{stage}_{var}_QQplot.png'), dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+        for var, fig in spmfigs.items():
+            fig.savefig(os.path.join(config.reportdir, f'{savingkw}_{stage}_{var}.png'), dpi=300, bbox_inches='tight')
+            plt.close(fig)
+
+        kinfig.suptitle(f'{config.stg_titles[stgi]} kinematics')
+        kinfig.savefig(os.path.join(config.reportdir, f'{savingkw}_{stage}_kinematics.png'), dpi=300, bbox_inches='tight')
+        plt.close(kinfig)
 
 # Save multispeed ptlabels to file
 clustdata['multispeed']['ptlabels'].to_csv(os.path.join(config.reportdir, f'{savingkw}_multispeed_ptlabels.csv'), index=False)
